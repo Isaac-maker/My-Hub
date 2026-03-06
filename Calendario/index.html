@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3x4 Calendar Pro - Responsive</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --secondary: #34495e;
+            --highlight: #27ae60; 
+            --danger: #d63031;    
+            --bg: #dfe6e9;
+            --card-bg: #ffffff;
+            /* Nuevo color para fines de semana */
+            --weekend-color: #ff9f43;
+            --weekend-bg: #fff5e6;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            background-color: var(--bg);
+            margin: 0;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        h1 { 
+            color: var(--primary); 
+            margin: 5px 0 15px 0; 
+            font-size: clamp(1.2rem, 4vw, 1.8rem);
+            text-align: center;
+        }
+
+        .year-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            gap: 12px;
+            width: 98vw;
+            flex-grow: 1;
+            max-width: 1600px;
+        }
+
+        @media (max-width: 1024px) {
+            .year-grid {
+                grid-template-columns: repeat(3, 1fr);
+                grid-template-rows: repeat(4, 1fr);
+                gap: 10px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .year-grid {
+                grid-template-columns: repeat(2, 1fr);
+                grid-template-rows: repeat(6, 1fr);
+                gap: 8px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .year-grid {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto;
+                gap: 12px;
+                width: 95vw;
+            }
+            
+            body {
+                padding: 5px;
+            }
+        }
+
+        .month-card {
+            background: var(--card-bg);
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #ccc;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .month-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .month-header-bar {
+            background-color: var(--primary);
+            color: white;
+            padding: 8px;
+            text-align: center;
+            font-weight: bold;
+            text-transform: uppercase;
+            border-bottom: 3px solid var(--highlight);
+            font-size: clamp(0.8rem, 2vw, 1rem);
+        }
+
+        .mini-calendar {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            font-size: clamp(0.6rem, 1.5vw, 0.7rem);
+            gap: 1px;
+            padding: 5px;
+            flex-grow: 1;
+        }
+
+        /* CAMBIO: Letras en negrita y línea debajo */
+        .weekday-label { 
+            font-weight: 900; 
+            color: var(--secondary); 
+            text-align: center; 
+            padding: 4px 0;
+            border-bottom: 2px solid #eee; /* Línea divisoria */
+            margin-bottom: 4px;
+        }
+
+        /* CAMBIO: Color naranja para Sábado (col 6) y Domingo (col 7) */
+        .weekday-label:nth-child(6), 
+        .weekday-label:nth-child(7) {
+            color: var(--weekend-color);
+        }
+
+        .mini-day { 
+            text-align: center; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            height: clamp(18px, 3vw, 20px);
+        }
+
+        /* Color naranja para números de fin de semana en la mini cuadrícula */
+        .mini-calendar div:nth-child(7n+6) span:not(.today-circle),
+        .mini-calendar div:nth-child(7n) span:not(.today-circle) {
+            color: var(--weekend-color);
+            font-weight: bold;
+        }
+
+        .today-circle {
+            background-color: var(--highlight);
+            color: white !important;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: clamp(18px, 3vw, 20px);
+            height: clamp(18px, 3vw, 20px);
+            font-weight: bold;
+        }
+
+        /* MODAL FULL MONTH VIEW */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%;
+            background: white;
+            z-index: 1000;
+            flex-direction: column;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .modal-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            max-width: 1000px;
+            margin: 0 auto 15px auto;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .modal-nav h2 {
+            font-size: clamp(1.5rem, 5vw, 2rem);
+            color: var(--primary);
+            margin: 0;
+        }
+
+        .full-month-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 8px;
+            width: 100%;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding-bottom: 20px;
+        }
+
+        .day-header-full {
+            background: var(--primary);
+            color: white;
+            text-align: center;
+            padding: clamp(6px, 2vw, 10px);
+            border-radius: 5px;
+            font-size: clamp(0.7rem, 2vw, 0.9rem);
+            font-weight: 900; /* Negrita extra */
+            border-bottom: 4px solid #eee; /* Línea debajo en modal */
+        }
+
+        /* CAMBIO: Color naranja para headers de fin de semana en modal */
+        .day-header-full:nth-child(6),
+        .day-header-full:nth-child(7) {
+            background: var(--weekend-color);
+        }
+
+        .day-box-full {
+            border: 1px solid #eee;
+            background: #fafafa;
+            border-radius: 5px;
+            padding: clamp(6px, 2vw, 10px);
+            font-size: clamp(1rem, 3vw, 1.4rem);
+            font-weight: bold;
+            min-height: clamp(60px, 15vw, 80px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* CAMBIO: Resaltar celdas de fin de semana en modal */
+        .full-month-grid div:nth-child(7n+6).day-box-full,
+        .full-month-grid div:nth-child(7n).day-box-full {
+            background: var(--weekend-bg);
+            color: var(--weekend-color);
+            border-color: var(--weekend-color);
+        }
+
+        .btn-red {
+            background-color: var(--danger);
+            color: white;
+            border: none;
+            padding: clamp(8px, 2vw, 12px) clamp(16px, 3vw, 24px);
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: clamp(0.8rem, 2vw, 1rem);
+            white-space: nowrap;
+            transition: background-color 0.2s;
+        }
+
+        .btn-red:hover {
+            background-color: #b71c1c;
+        }
+
+        .full-month-grid .today-circle {
+            width: clamp(30px, 6vw, 40px);
+            height: clamp(30px, 6vw, 40px);
+            font-size: clamp(1rem, 3vw, 1.5rem);
+        }
+    </style>
+</head>
+<body>
+
+    <h1 id="yearDisplay"></h1>
+    <div class="year-grid" id="yearGrid"></div>
+
+    <div id="monthModal" class="modal">
+        <div class="modal-nav">
+            <h2 id="modalMonthName"></h2>
+            <button class="btn-red" onclick="closeModal()">← Back</button>
+        </div>
+        <div id="fullMonthGrid" class="full-month-grid"></div>
+    </div>
+
+    <script>
+        const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        const dayLabels = ["M", "T", "W", "T", "F", "SA", "SU"];
+        const fullDayLabels = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+        
+        const today = new Date();
+        const y = today.getFullYear();
+        const m = today.getMonth();
+        const d = today.getDate();
+
+        document.getElementById('yearDisplay').innerText = `${y} CALENDAR`;
+
+        function getMondayFirstIndex(date) {
+            let day = date.getDay(); 
+            return day === 0 ? 6 : day - 1;
+        }
+
+        function createCalendar() {
+            const container = document.getElementById('yearGrid');
+            container.innerHTML = '';
+            for (let i = 0; i < 12; i++) {
+                const card = document.createElement('div');
+                card.className = 'month-card';
+                card.onclick = () => showMonthFull(i);
+                card.innerHTML = `<div class="month-header-bar">${monthNames[i]}</div>`;
+
+                const mini = document.createElement('div');
+                mini.className = 'mini-calendar';
+                dayLabels.forEach(label => mini.innerHTML += `<div class="weekday-label">${label}</div>`);
+
+                const firstDayIdx = getMondayFirstIndex(new Date(y, i, 1));
+                const daysCount = new Date(y, i + 1, 0).getDate();
+
+                for (let j = 0; j < firstDayIdx; j++) mini.innerHTML += '<div></div>';
+                for (let dayNum = 1; dayNum <= daysCount; dayNum++) {
+                    const isCurrent = (y === today.getFullYear() && i === m && dayNum === d);
+                    mini.innerHTML += `<div class="mini-day"><span class="${isCurrent ? 'today-circle' : ''}">${dayNum}</span></div>`;
+                }
+                card.appendChild(mini);
+                container.appendChild(card);
+            }
+        }
+
+        function showMonthFull(idx) {
+            const modal = document.getElementById('monthModal');
+            const grid = document.getElementById('fullMonthGrid');
+            document.getElementById('modalMonthName').innerText = `${monthNames[idx]} ${y}`;
+            grid.innerHTML = '';
+
+            fullDayLabels.forEach(label => grid.innerHTML += `<div class="day-header-full">${label}</div>`);
+
+            const firstDayIdx = getMondayFirstIndex(new Date(y, idx, 1));
+            const daysCount = new Date(y, idx + 1, 0).getDate();
+
+            for (let j = 0; j < firstDayIdx; j++) grid.innerHTML += '<div></div>';
+            
+            for (let dayNum = 1; dayNum <= daysCount; dayNum++) {
+                const isCurrent = (y === today.getFullYear() && idx === m && dayNum === d);
+                grid.innerHTML += `
+                    <div class="day-box-full">
+                        <span class="${isCurrent ? 'today-circle' : ''}">${dayNum}</span>
+                    </div>`;
+            }
+            
+            modal.style.display = 'flex';
+            window.scrollTo(0,0);
+        }
+
+        function closeModal() {
+            document.getElementById('monthModal').style.display = 'none';
+        }
+
+        createCalendar();
+    </script>
+</body>
+</html>

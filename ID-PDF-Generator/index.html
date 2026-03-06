@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ID Card Stacked PDF Converter</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #f4f7f9;
+            display: flex;
+            justify-content: center;
+            padding: 40px;
+            color: #333;
+        }
+        .app-card {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            max-width: 800px;
+            width: 100%;
+            text-align: center;
+        }
+        h2 { color: #1a73e8; margin-bottom: 10px; }
+        p.subtitle { color: #666; margin-bottom: 30px; }
+
+        .upload-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .upload-box {
+            border: 2px dashed #cbd5e0;
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: 0.3s;
+            background: #fafafa;
+        }
+        .upload-box:hover { border-color: #1a73e8; background: #f0f7ff; }
+        
+        .preview-thumb {
+            width: 100%;
+            height: 180px;
+            object-fit: contain;
+            margin-top: 15px;
+            display: none;
+            border-radius: 8px;
+            border: 1px solid #eee;
+        }
+
+        .btn-generate {
+            background: #1a73e8;
+            color: white;
+            padding: 15px 40px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        .btn-generate:disabled { background: #ccc; cursor: not-allowed; }
+        .btn-generate:hover:not(:disabled) { background: #1557b0; }
+
+        .loading-text {
+            color: #1a73e8;
+            margin-top: 15px;
+            display: none;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-card">
+    <h2>ID PDF Generator</h2>
+    <p class="subtitle">Upload both sides to create a centered, stacked PDF.</p>
+    <p class="subtitle" style="color: #f53f3f;">Remember to crop the photo properly before using it.</p>
+
+    <div class="upload-grid">
+        <div class="upload-box" onclick="document.getElementById('frontIn').click()">
+            <label><strong>Front Side</strong></label>
+            <input type="file" id="frontIn" hidden accept="image/*">
+            <img id="frontPrev" class="preview-thumb">
+            <p id="frontText">Click to upload Front</p>
+        </div>
+
+        <div class="upload-box" onclick="document.getElementById('backIn').click()">
+            <label><strong>Back Side</strong></label>
+            <input type="file" id="backIn" hidden accept="image/*">
+            <img id="backPrev" class="preview-thumb">
+            <p id="backText">Click to upload Back</p>
+        </div>
+    </div>
+
+    <button id="downloadBtn" class="btn-generate" disabled>Generate PDF</button>
+    <p id="loadingText" class="loading-text">Generating PDF...</p>
+    
+    <div style="text-align: left; margin-top: 20px;">
+        <small style="color: #777;">Created by • Isaac-maker </small> 
+    </div>
+     
+</div>
+
+<script>
+    const { jsPDF } = window.jspdf;
+    
+    const frontIn = document.getElementById('frontIn');
+    const backIn = document.getElementById('backIn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const loadingText = document.getElementById('loadingText');
+
+    let frontImgData = null;
+    let backImgData = null;
+    let frontImgObj = null;
+    let backImgObj = null;
+
+    function processImage(input, previewId, textId, side) {
+        const file = input.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const imgElement = document.getElementById(previewId);
+                imgElement.src = e.target.result;
+                imgElement.style.display = 'block';
+                document.getElementById(textId).style.display = 'none';
+                
+                // Crear objeto Image para obtener dimensiones
+                const img = new Image();
+                img.onload = () => {
+                    if (side === 'front') {
+                        frontImgData = e.target.result;
+                        frontImgObj = img;
+                    } else {
+                        backImgData = e.target.result;
+                        backImgObj = img;
+                    }
+                    checkRequirements();
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+
+    function checkRequirements() {
+        downloadBtn.disabled = !(frontImgData && backImgData);
+    }
+
+    frontIn.onchange = () => processImage(frontIn, 'frontPrev', 'frontText', 'front');
+    backIn.onchange = () => processImage(backIn, 'backPrev', 'backText', 'back');
+
+    downloadBtn.onclick = async () => {
+        try {
+            downloadBtn.disabled = true;
+            loadingText.style.display = 'block';
+
+            // Crear PDF A4 (210mm x 297mm)
+            const pdf = new jsPDF({
+                orientation: 'portrait',
+                unit: 'mm',
+                format: 'a4'
+            });
+
+            const pageWidth = 210;
+            const pageHeight = 297;
+            const maxWidth = 200; // Ancho máximo para las imágenes
+            const maxHeight = 140; // Alto máximo por imagen
+            const spacing = 8; // Espacio entre imágenes
+
+            // Función para calcular dimensiones manteniendo aspect ratio
+            function calculateDimensions(img, maxW, maxH) {
+                let width = img.width;
+                let height = img.height;
+                const ratio = width / height;
+
+                if (width > maxW) {
+                    width = maxW;
+                    height = width / ratio;
+                }
+                if (height > maxH) {
+                    height = maxH;
+                    width = height * ratio;
+                }
+
+                return { width, height };
+            }
+
+            // Calcular dimensiones para ambas imágenes
+            const frontDims = calculateDimensions(frontImgObj, maxWidth, maxHeight);
+            const backDims = calculateDimensions(backImgObj, maxWidth, maxHeight);
+
+            // Convertir px a mm (asumiendo 96 DPI)
+            const pxToMm = 0.264583;
+            const frontWidthMm = frontDims.width * pxToMm;
+            const frontHeightMm = frontDims.height * pxToMm;
+            const backWidthMm = backDims.width * pxToMm;
+            const backHeightMm = backDims.height * pxToMm;
+
+            // Limitar a maxWidth y maxHeight
+            const frontFinalWidth = Math.min(frontWidthMm, maxWidth);
+            const frontFinalHeight = Math.min(frontHeightMm, maxHeight);
+            const backFinalWidth = Math.min(backWidthMm, maxWidth);
+            const backFinalHeight = Math.min(backHeightMm, maxHeight);
+
+            // Calcular altura total ocupada
+            const totalHeight = frontFinalHeight + backFinalHeight + spacing;
+            
+            // Posición inicial Y (centrado verticalmente)
+            let currentY = (pageHeight - totalHeight) / 2;
+
+            // Agregar imagen frontal (centrada horizontalmente)
+            const frontX = (pageWidth - frontFinalWidth) / 2;
+            pdf.addImage(
+                frontImgData, 
+                'JPEG', 
+                frontX, 
+                currentY, 
+                frontFinalWidth, 
+                frontFinalHeight,
+                undefined,
+                'FAST'
+            );
+
+            // Mover Y hacia abajo
+            currentY += frontFinalHeight + spacing;
+
+            // Agregar imagen trasera (centrada horizontalmente)
+            const backX = (pageWidth - backFinalWidth) / 2;
+            pdf.addImage(
+                backImgData, 
+                'JPEG', 
+                backX, 
+                currentY, 
+                backFinalWidth, 
+                backFinalHeight,
+                undefined,
+                'FAST'
+            );
+
+            // Descargar
+            pdf.save('ID_Document.pdf');
+
+            loadingText.style.display = 'none';
+            downloadBtn.disabled = false;
+
+        } catch (error) {
+            console.error('Error generating PDF:', error);
+            alert('Error generating PDF: ' + error.message);
+            loadingText.style.display = 'none';
+            downloadBtn.disabled = false;
+        }
+    };
+</script>
+
+</body>
+</html>

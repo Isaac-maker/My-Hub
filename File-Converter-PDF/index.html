@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal Converter | Word - PDF - Images</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #eef2f7; padding: 40px; color: #333; }
+        .card { max-width: 850px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.1); }
+        h2 { color: #1a73e8; text-align: center; margin-bottom: 25px; }
+        
+        .drop-zone { 
+            border: 2px dashed #1a73e8; padding: 40px; text-align: center; 
+            border-radius: 10px; cursor: pointer; transition: 0.3s; background: #f8fbff;
+        }
+        .drop-zone:hover { background: #e8f0fe; border-color: #1557b0; }
+        
+        #preview { 
+            margin-top: 30px; border: 1px solid #ddd; padding: 40px; 
+            background: white; min-height: 200px; overflow-wrap: break-word;
+        }
+        
+        /* Ensures images stay within PDF bounds */
+        #preview img { max-width: 100% !important; height: auto !important; display: block; margin: 10px auto; }
+
+        .controls { display: flex; gap: 15px; margin-top: 25px; justify-content: center; }
+        
+        button { 
+            padding: 12px 25px; border: none; border-radius: 6px; 
+            cursor: pointer; font-weight: 600; font-size: 14px; transition: 0.2s;
+        }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        
+        .btn-pdf { background: #dc3545; color: white; }
+        .btn-pdf:hover { background: #c82333; }
+        .btn-word { background: #007bff; color: white; }
+        .btn-word:hover { background: #0069d9; }
+        
+        .status-msg { text-align: center; font-size: 0.9em; color: #666; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>All-in-One File Converter</h2>
+    
+    <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+        <strong>Click to upload</strong> or drag and drop files here
+        <br><span style="font-size: 0.8em; color: #666;">(Word .docx, PDF, JPG, PNG)</span>
+        <input type="file" id="fileInput" hidden accept=".docx, .pdf, .jpg, .jpeg, .png">
+    </div>
+
+    <div id="status" class="status-msg"></div>
+
+    <div id="preview">
+        <p style="text-align:center; color: #999;">Content preview will appear here...</p>
+    </div>
+
+    <div class="controls">
+        <button id="toPdfBtn" class="btn-pdf" style="display:none;">Download as PDF</button>
+        <button id="toWordBtn" class="btn-word" style="display:none;">Download as Word (.doc)</button>
+    </div>
+     <small style="color: #777;">Created by • Isaac-maker </small>
+</div>
+
+<script>
+    // PDF.js worker configuration
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+
+    const fileInput = document.getElementById('fileInput');
+    const preview = document.getElementById('preview');
+    const toPdfBtn = document.getElementById('toPdfBtn');
+    const toWordBtn = document.getElementById('toWordBtn');
+    const status = document.getElementById('status');
+
+    fileInput.addEventListener('change', handleFile);
+
+    async function handleFile(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const extension = file.name.split('.').pop().toLowerCase();
+        status.innerText = "Processing file: " + file.name;
+        
+        // Reset view
+        toPdfBtn.style.display = "none";
+        toWordBtn.style.display = "none";
+        preview.innerHTML = "Working...";
+
+        try {
+            if (extension === 'docx') {
+                // WORD -> PDF (via HTML Preview)
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    const result = await mammoth.convertToHtml({arrayBuffer: e.target.result});
+                    preview.innerHTML = result.value;
+                    toPdfBtn.style.display = "block";
+                    status.innerText = "Word loaded. Ready to convert to PDF.";
+                };
+                reader.readAsArrayBuffer(file);
+
+            } else if (['jpg', 'jpeg', 'png'].includes(extension)) {
+                // IMAGE -> PDF
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    preview.innerHTML = `<img src="${e.target.result}" alt="Preview">`;
+                    toPdfBtn.style.display = "block";
+                    status.innerText = "Image loaded. Ready to convert to PDF.";
+                };
+                reader.readAsDataURL(file);
+
+            } else if (extension === 'pdf') {
+                // PDF -> WORD (Text Extraction)
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    const typedarray = new Uint8Array(e.target.result);
+                    const pdf = await pdfjsLib.getDocument(typedarray).promise;
+                    let fullText = "";
+                    
+                    for(let i = 1; i <= pdf.numPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const content = await page.getTextContent();
+                        const strings = content.items.map(s => s.str);
+                        fullText += `<p>${strings.join(" ")}</p>`;
+                    }
+                    preview.innerHTML = `<h3>Extracted Text:</h3>${fullText}`;
+                    toWordBtn.style.display = "block";
+                    status.innerText = "PDF text extracted. Ready to download as Word.";
+                };
+                reader.readAsArrayBuffer(file);
+            }
+        } catch (error) {
+            console.error(error);
+            status.innerText = "Error processing file.";
+            preview.innerHTML = "An error occurred during file processing.";
+        }
+    }
+
+    // PDF Export Logic (FIXED FOR CLIPPING)
+    toPdfBtn.onclick = () => {
+        const element = document.getElementById('preview');
+        const opt = {
+            margin:       [15, 15, 15, 15], // Top, Left, Bottom, Right margins
+            filename:     'converted_file.pdf',
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { 
+                scale: 2, 
+                useCORS: true, 
+                letterRendering: true,
+                scrollY: 0
+            },
+            // Avoid clipping: 'css' allows using page-break-before in CSS, 
+            // 'avoid-all' prevents breaking mid-element
+            pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+
+        status.innerText = "Generating PDF... please wait.";
+        html2pdf().set(opt).from(element).save().then(() => {
+            status.innerText = "PDF Downloaded successfully.";
+        });
+    };
+
+    // Word Export Logic (Basic .doc wrapper)
+    toWordBtn.onclick = () => {
+        const content = preview.innerHTML;
+        const blob = new Blob(['\ufeff', content], {
+            type: 'application/msword'
+        });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'extracted_content.doc';
+        link.click();
+        status.innerText = "Word file downloaded.";
+    };
+</script>
+
+</body>
+
+</html>

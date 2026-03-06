@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JS Image Compressor</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; background: #f0f2f5; color: #333; }
+        .container { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.1); max-width: 500px; width: 100%; text-align: center; }
+        h2 { margin-top: 0; color: #1a73e8; }
+        input[type="file"] { margin: 1.5rem 0; width: 100%; }
+        .controls { margin: 1.5rem 0; padding: 1rem; background: #f8f9fa; border-radius: 8px; }
+        label { display: block; margin-bottom: 0.5rem; font-weight: bold; }
+        input[type="range"] { width: 100%; cursor: pointer; }
+        #preview { max-width: 100%; margin-top: 1.5rem; display: none; border-radius: 8px; border: 1px solid #ddd; }
+        .stats { font-size: 0.9rem; color: #555; margin-top: 1rem; line-height: 1.6; text-align: left; background: #e9ecef; padding: 10px; border-radius: 4px; }
+        button { background: #1a73e8; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; margin-top: 1.5rem; font-weight: bold; transition: background 0.3s; width: 100%; }
+        button:hover { background: #1557b0; }
+        #qualityVal { font-weight: bold; color: #1a73e8; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Image Compressor</h2>
+    <p>Select an image to reduce its file size</p>
+    
+    <input type="file" id="upload" accept="image/*">
+    
+    <div class="controls">
+        <label for="quality">Compression Quality: <span id="qualityVal">70%</span></label>
+        <input type="range" id="quality" min="0.1" max="1.0" step="0.1" value="0.7">
+    </div>
+
+    <img id="preview" alt="Compressed preview">
+    
+    <div id="info" class="stats" style="display: none;"></div>
+    
+    <a id="download" style="display:none;">
+        <button type="button">Download Compressed Image</button>
+    </a>
+</div>
+
+<script>
+    const upload = document.getElementById('upload');
+    const qualitySlider = document.getElementById('quality');
+    const qualityVal = document.getElementById('qualityVal');
+    const preview = document.getElementById('preview');
+    const info = document.getElementById('info');
+    const downloadContainer = document.getElementById('download');
+
+    // Update quality label when slider moves
+    qualitySlider.addEventListener('input', (e) => {
+        qualityVal.innerText = Math.round(e.target.value * 100) + '%';
+    });
+
+    upload.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+
+        reader.onload = function(event) {
+            const img = new Image();
+            img.src = event.target.result;
+
+            img.onload = function() {
+                processCompression(img, file.name, parseFloat(qualitySlider.value), file.size);
+            };
+        };
+    });
+
+    function processCompression(img, fileName, quality, originalSize) {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Set canvas dimensions to match image
+        canvas.width = img.width;
+        canvas.height = img.height;
+
+        // Draw image onto canvas
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        // Export as JPEG with the selected quality
+        const mimeType = "image/jpeg"; 
+        const dataUrl = canvas.toDataURL(mimeType, quality);
+
+        // Update UI
+        preview.src = dataUrl;
+        preview.style.display = 'block';
+
+        // Approximate resulting file size
+        const compressedSize = Math.round((dataUrl.length - 22) * 3 / 4);
+        const reduction = Math.round((1 - compressedSize / originalSize) * 100);
+        
+        info.style.display = 'block';
+        info.innerHTML = `
+            <strong>Original Size:</strong> ${(originalSize / 1024).toFixed(2)} KB <br>
+            <strong>Compressed Size:</strong> ${(compressedSize / 1024).toFixed(2)} KB <br>
+            <strong>Reduction:</strong> ${reduction > 0 ? reduction : 0}%
+        `;
+
+        // Setup download link
+        downloadContainer.href = dataUrl;
+        downloadContainer.download = `compressed_${fileName}`;
+        downloadContainer.style.display = 'block';
+    }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bulk Image Cropper to PNG</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; margin: 0; display: flex; flex-direction: column; align-items: center; }
+        .container { background: white; max-width: 900px; width: 95%; margin: 20px; padding: 25px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        .crop-area { width: 100%; height: 550px; margin-top: 20px; background-color: #222; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+        img { max-width: 100%; display: block; }
+        .controls { display: flex; gap: 15px; margin-bottom: 20px; align-items: center; flex-wrap: wrap; border-bottom: 1px solid #eee; padding-bottom: 20px; }
+        .btn { padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.3s; font-size: 14px; }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-next { background: #28a745; color: white; display: none; }
+        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+        .btn:active { transform: translateY(0); }
+        #status { font-weight: bold; color: #444; margin: 10px 0; padding: 10px; background: #e9ecef; border-radius: 6px; width: 100%; box-sizing: border-box; }
+        .input-group { display: flex; align-items: center; gap: 8px; background: #f8f9fa; padding: 8px 12px; border-radius: 6px; border: 1px solid #ddd; }
+        input[type="number"] { width: 70px; padding: 6px; border: 1px solid #ccc; border-radius: 4px; }
+        input[type="file"] { font-size: 0.9rem; }
+        h2 { margin-top: 0; color: #333; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Bulk Manual Image Cropper (PNG Export)</h2>
+    
+    <div class="controls">
+        <div class="input-group">
+            <label>Final Size (px):</label>
+            <input type="number" id="width" value="512"> 
+            <span>x</span> 
+            <input type="number" id="height" value="512">
+        </div>
+        <input type="file" id="fileInput" multiple accept="image/*">
+        <button class="btn btn-primary" id="startBtn">Start Processing</button>
+    </div>
+
+    <div id="status">Select images to get started.</div>
+
+    <div class="crop-area">
+        <img id="imageToCrop" src="" alt="">
+    </div>
+
+    <div style="margin-top: 20px; text-align: right; display: flex; justify-content: space-between; align-items: center;">
+        <small style="color: #777;">Created by • Isaac-maker </small>
+        <button class="btn btn-next" id="nextBtn">Crop and Next ➔</button>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+
+<script>
+    let cropper;
+    let files = [];
+    let currentIndex = 0;
+    let zip = new JSZip();
+
+    const fileInput = document.getElementById('fileInput');
+    const imageElement = document.getElementById('imageToCrop');
+    const startBtn = document.getElementById('startBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const status = document.getElementById('status');
+
+    startBtn.onclick = () => {
+        files = Array.from(fileInput.files);
+        if (files.length === 0) {
+            alert("Please select at least one image.");
+            return;
+        }
+        
+        // Reset ZIP and counter for a new batch
+        zip = new JSZip();
+        currentIndex = 0;
+        startBtn.style.display = 'none';
+        nextBtn.style.display = 'inline-block';
+        loadNextImage();
+    };
+
+    function loadNextImage() {
+        if (currentIndex >= files.length) {
+            finishZip();
+            return;
+        }
+
+        status.innerText = `Editing image ${currentIndex + 1} of ${files.length}: ${files[currentIndex].name}`;
+        
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            if (cropper) cropper.destroy();
+            
+            imageElement.src = e.target.result;
+            
+            const targetW = parseInt(document.getElementById('width').value) || 512;
+            const targetH = parseInt(document.getElementById('height').value) || 512;
+
+            cropper = new Cropper(imageElement, {
+                aspectRatio: targetW / targetH,
+                viewMode: 1, 
+                autoCropArea: 0.8,
+                responsive: true,
+                restore: false,
+                guides: true,
+                center: true,
+                highlight: false,
+                cropBoxMovable: true,
+                cropBoxResizable: true,
+                toggleDragModeOnDblclick: false,
+            });
+        };
+        reader.readAsDataURL(files[currentIndex]);
+    }
+
+    nextBtn.onclick = () => {
+        const targetW = parseInt(document.getElementById('width').value) || 512;
+        const targetH = parseInt(document.getElementById('height').value) || 512;
+
+        // 1. Get canvas with the exact defined size
+        const canvas = cropper.getCroppedCanvas({
+            width: targetW,
+            height: targetH,
+            imageSmoothingEnabled: true,
+            imageSmoothingQuality: 'high'
+        });
+
+        // 2. Convert to Blob forcing image/png format
+        canvas.toBlob((blob) => {
+            // Get original name without extension
+            const originalFullName = files[currentIndex].name;
+            const fileNameWithoutExt = originalFullName.substring(0, originalFullName.lastIndexOf('.')) || originalFullName;
+            
+            // 3. Save to ZIP with .png extension
+            zip.file(`${fileNameWithoutExt}.png`, blob);
+            
+            currentIndex++;
+            loadNextImage();
+        }, 'image/png'); 
+    };
+
+    async function finishZip() {
+        status.innerText = "Generating ZIP file... please wait.";
+        
+        try {
+            const content = await zip.generateAsync({type: "blob"});
+            saveAs(content, "cropped_images_png.zip");
+            
+            status.innerText = "Done! The process has finished and your download has started.";
+            nextBtn.style.display = 'none';
+            startBtn.style.display = 'inline-block';
+            startBtn.innerText = "Process another batch";
+            
+            // Cleanup
+            fileInput.value = "";
+            if (cropper) cropper.destroy();
+            imageElement.src = "";
+        } catch (err) {
+            console.error(err);
+            status.innerText = "Error generating the ZIP file.";
+        }
+    }
+</script>
+
+</body>
+</html>
+

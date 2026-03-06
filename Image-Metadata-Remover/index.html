@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Image Suite | Metadata Inspector & Remover</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.js"></script>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --bg: #f8fafc;
+            --text-main: #1e293b;
+            --ai-accent: #a855f7;
+            --ai-text-highlight: #34d399;
+            --console-bg: #0f172a;
+        }
+
+        body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text-main); margin: 0; padding: 20px; display: flex; justify-content: center; }
+        .container { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); width: 100%; max-width: 850px; }
+        
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; }
+        .tab-btn { padding: 12px 24px; cursor: pointer; border: none; background: none; font-weight: 600; color: #64748b; border-bottom: 3px solid transparent; transition: 0.3s; }
+        .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .drop-zone { border: 2px dashed #cbd5e0; padding: 30px; border-radius: 12px; text-align: center; cursor: pointer; background: #fdfdfd; transition: 0.3s; }
+        .drop-zone:hover { border-color: var(--primary); background: #f1f5f9; }
+        
+        #metadataDisplay { 
+            margin-top: 20px; padding: 20px; background: var(--console-bg); color: #e2e8f0;
+            border-radius: 12px; font-family: 'Fira Code', monospace; font-size: 13px;
+            max-height: 600px; overflow-y: auto;
+        }
+
+        .ai-box { border: 1px solid var(--ai-accent); padding: 15px; border-radius: 8px; margin-bottom: 15px; background: #1e1b4b; color: #e9d5ff; position: relative; }
+        .ai-box.highlight { border-color: var(--ai-text-highlight); background: #064e3b; color: #ecfdf5; }
+        
+        .copy-btn { background: var(--ai-accent); border: none; color: white; padding: 6px 12px; border-radius: 4px; cursor: pointer; float: right; font-size: 11px; font-weight: bold; margin-bottom: 5px; }
+        .ai-box.highlight .copy-btn { background: var(--ai-text-highlight); color: #064e3b; }
+        
+        .meta-header { color: #f8fafc; font-weight: bold; margin: 20px 0 8px; border-bottom: 1px solid #334155; display: flex; align-items: center; gap: 8px; }
+        .meta-entry { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dotted #1e293b; }
+        .meta-entry span:first-child { color: #94a3b8; }
+        
+        button.main-btn { background: var(--primary); color: white; border: none; padding: 16px; border-radius: 10px; width: 100%; font-weight: 600; cursor: pointer; margin-top: 15px; font-size: 16px; }
+        button.main-btn:disabled { background: #cbd5e0; }
+
+        footer { text-align: center; margin-top: 25px; font-size: 12px; color: #94a3b8; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1 style="text-align: center; margin-top: 0;">Tools for photos and AI</h1>
+    
+
+    <div class="tabs">
+        <button class="tab-btn active" onclick="openTab('remover')">1. Metadata Remover</button>
+        <button class="tab-btn" onclick="openTab('viewer')">2. Prompt & Info Inspector</button>
+    </div>
+
+    <div id="remover" class="tab-content active">
+        <div class="drop-zone" onclick="document.getElementById('fileInputRemover').click()">
+            <p><strong>Drag & Drop</strong> images here or click to browse</p>
+            <p style="font-size: 12px; color: #94a3b8;">Clean all metadata before sharing.</p>
+            <input type="file" id="fileInputRemover" multiple accept="image/png, image/jpeg, image/webp">
+        </div>
+        <button id="processBtn" class="main-btn" disabled>Strip Metadata & Download ZIP</button>
+    </div>
+
+    <div id="viewer" class="tab-content">
+        <div class="drop-zone" onclick="document.getElementById('fileInputViewer').click()">
+            <p>Drop an image to extract <strong>Dimensions, Prompts & Info</strong></p>
+            <input type="file" id="fileInputViewer" accept="image/png, image/jpeg, image/webp">
+        </div>
+        <div id="metadataDisplay">Waiting for image analysis...</div>
+    </div>
+
+    <div id="status" style="text-align:center; margin-top:15px; font-weight:bold; color: var(--primary);"></div>
+    
+    <footer>
+        Created by &bull; Isaac-maker
+    </footer>
+</div>
+
+<script>
+    function openTab(tabId) {
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        event.currentTarget.classList.add('active');
+    }
+
+    const viewerInput = document.getElementById('fileInputViewer');
+    viewerInput.addEventListener('change', async function() {
+        const file = this.files[0];
+        if (!file) return;
+
+        const display = document.getElementById('metadataDisplay');
+        display.innerHTML = "Processing data...";
+
+        let html = `<div class="meta-header">📂 FILE SYSTEM INFO</div>`;
+        html += `<div class="meta-entry"><span>Filename:</span><span>${file.name}</span></div>`;
+        html += `<div class="meta-entry"><span>Size:</span><span>${(file.size / 1024).toFixed(2)} KB</span></div>`;
+        html += `<div class="meta-entry"><span>Type:</span><span>${file.type}</span></div>`;
+
+        const imgDimensions = await new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => resolve({ w: img.width, h: img.height });
+            img.src = URL.createObjectURL(file);
+        });
+
+        html += `<div class="meta-header">📏 IMAGE DIMENSIONS</div>`;
+        html += `<div class="meta-entry"><span>Width:</span><span>${imgDimensions.w} px</span></div>`;
+        html += `<div class="meta-entry"><span>Height:</span><span>${imgDimensions.h} px</span></div>`;
+
+        // AI Data Extraction
+        const aiData = await readAIPrompts(file);
+        
+        // SECCIÓN ESPECÍFICA PARA "TEXT"
+        if (aiData.extractedText) {
+            html += `<div class="meta-header">🎯 PRIMARY PROMPT (TEXT)</div>`;
+            html += `<div class="ai-box highlight">
+                <button class="copy-btn" onclick="copyTextById('primaryText')">Copy Text</button>
+                <div id="primaryText" style="white-space: pre-wrap; word-break: break-all; font-size:14px;">${aiData.extractedText}</div>
+            </div>`;
+        }
+
+        // SECCIÓN GENERAL DE PARÁMETROS
+        if (aiData.prompt || aiData.workflow || aiData.parameters) {
+            html += `<div class="meta-header">🤖 AI GENERATION PARAMETERS</div>`;
+            const mainPrompt = aiData.prompt || aiData.parameters || aiData.workflow;
+            html += `<div class="ai-box">
+                <button class="copy-btn" onclick="copyTextById('fullPrompt')">Copy All</button>
+                <div id="fullPrompt" style="white-space: pre-wrap; word-break: break-all; font-size:12px;">${mainPrompt}</div>
+            </div>`;
+        }
+
+        // Standard EXIF
+        EXIF.getData(file, function() {
+            const exifTags = EXIF.getAllTags(this);
+            if (Object.keys(exifTags).length > 0) {
+                html += `<div class="meta-header">📸 EXIF DATA</div>`;
+                for (let tag in exifTags) {
+                    if (typeof exifTags[tag] !== 'object') {
+                        html += `<div class="meta-entry"><span>${tag}:</span><span>${exifTags[tag]}</span></div>`;
+                    }
+                }
+            }
+            display.innerHTML = html;
+        });
+    });
+
+    async function readAIPrompts(file) {
+        const buffer = await file.arrayBuffer();
+        const view = new DataView(buffer);
+        let results = { extractedText: null };
+
+        if (file.type === "image/png") {
+            let offset = 8;
+            while (offset < view.byteLength) {
+                const length = view.getUint32(offset);
+                const type = String.fromCharCode(...new Uint8Array(buffer, offset + 4, 4));
+                if (type === 'tEXt' || type === 'iTXt') {
+                    const chunkData = new Uint8Array(buffer, offset + 8, length);
+                    const decoded = new TextDecoder().decode(chunkData);
+                    const parts = decoded.split('\0');
+                    
+                    // En PNG, la estructura suele ser Key\0Value o Key\0Flags...\0Value
+                    const key = parts[0].toLowerCase();
+                    let value = (type === 'iTXt') ? parts.slice(3).join('\0') : parts.slice(1).join('\0');
+
+                    results[key] = value;
+
+                    // Intentar buscar "text" dentro de posibles JSON (ComfyUI / Automatic1111)
+                    try {
+                        const json = JSON.parse(value);
+                        // Buscar recursivamente o en lugares comunes
+                        if (json.text) results.extractedText = json.text;
+                        for (let k in json) {
+                            if (json[k].inputs && json[k].inputs.text) {
+                                results.extractedText = json[k].inputs.text;
+                            }
+                        }
+                    } catch(e) {}
+                    
+                    // Si la llave es literalmente "text"
+                    if (key === 'text') results.extractedText = value;
+                }
+                offset += length + 12;
+                if (type === 'IEND') break;
+            }
+        }
+        return results;
+    }
+
+    function copyTextById(id) {
+        const text = document.getElementById(id).innerText;
+        navigator.clipboard.writeText(text);
+        alert("Copied to clipboard!");
+    }
+
+    // REMOVER LOGIC
+    const fileRemover = document.getElementById('fileInputRemover');
+    const processBtn = document.getElementById('processBtn');
+
+    fileRemover.addEventListener('change', () => { 
+        processBtn.disabled = fileRemover.files.length === 0; 
+    });
+
+    processBtn.addEventListener('click', async () => {
+        const zip = new JSZip();
+        processBtn.innerText = "Processing...";
+        for (let file of fileRemover.files) {
+            const clean = await new Promise(res => {
+                const img = new Image();
+                img.src = URL.createObjectURL(file);
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width; canvas.height = img.height;
+                    canvas.getContext('2d').drawImage(img, 0, 0);
+                    canvas.toBlob(res, file.type, 0.95);
+                };
+            });
+            zip.file("clean_" + file.name, clean);
+        }
+        const content = await zip.generateAsync({type:"blob"});
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(content);
+        a.download = "cleansed_images.zip";
+        a.click();
+        processBtn.innerText = "Strip Metadata & Download ZIP";
+    });
+</script>
+
+</body>
+</html>
