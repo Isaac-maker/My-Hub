@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Video → Frames</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d0f14;
+    --surface: #161921;
+    --border: #252a36;
+    --accent: #6b8cff;
+    --accent2: #a78bfa;
+    --text: #e2e6f0;
+    --muted: #6b7280;
+    --success: #34d399;
+    --danger: #f87171;
+    --radius: 10px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 16px 60px;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 36px;
+  }
+
+  header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  header p {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin-top: 6px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+    width: 100%;
+    max-width: 680px;
+    margin-bottom: 20px;
+  }
+
+  .card h2 {
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+
+  /* Drop zone */
+  #drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+  }
+
+  #drop-zone:hover, #drop-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(107,140,255,0.05);
+  }
+
+  #drop-zone input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+  }
+
+  #drop-zone .icon {
+    font-size: 2.4rem;
+    margin-bottom: 10px;
+  }
+
+  #drop-zone p {
+    color: var(--muted);
+    font-size: 0.88rem;
+  }
+
+  #drop-zone strong {
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  #file-name {
+    margin-top: 10px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--success);
+  }
+
+  /* Controls */
+  .controls-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+
+  label {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+
+  select, input[type="number"] {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    padding: 9px 12px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  select:focus, input[type="number"]:focus {
+    border-color: var(--accent);
+  }
+
+  .range-row {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .range-row input[type="range"] {
+    flex: 1;
+    accent-color: var(--accent);
+  }
+
+  .range-val {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--accent);
+    min-width: 60px;
+    text-align: right;
+  }
+
+  /* Video preview */
+  #preview-wrap { display: none; }
+  #preview {
+    width: 100%;
+    border-radius: 8px;
+    background: #000;
+    max-height: 260px;
+  }
+
+  .video-info {
+    display: flex;
+    gap: 16px;
+    margin-top: 10px;
+    font-size: 0.78rem;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+  }
+
+  .video-info span b { color: var(--text); font-weight: 500; }
+
+  /* Buttons */
+  .btn-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 4px;
+  }
+
+  button {
+    flex: 1;
+    padding: 11px;
+    border-radius: 8px;
+    border: none;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+  }
+
+  button:active { transform: scale(0.98); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  #btn-extract {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #fff;
+  }
+
+  #btn-download {
+    background: var(--success);
+    color: #0d0f14;
+    display: none;
+  }
+
+  #btn-clear {
+    background: var(--border);
+    color: var(--muted);
+    flex: 0 0 auto;
+    padding: 11px 18px;
+  }
+
+  /* Progress */
+  #progress-wrap { display: none; margin-top: 4px; }
+  #progress-bar-bg {
+    background: var(--border);
+    border-radius: 99px;
+    height: 6px;
+    overflow: hidden;
+  }
+  #progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    width: 0%;
+    transition: width 0.15s;
+    border-radius: 99px;
+  }
+  #progress-label {
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-top: 6px;
+    font-family: 'DM Mono', monospace;
+  }
+
+  /* Gallery */
+  #gallery-card { display: none; }
+  #gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
+  }
+
+  .thumb-wrap {
+    position: relative;
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    aspect-ratio: 16/9;
+    cursor: pointer;
+    transition: border-color 0.2s, transform 0.15s;
+  }
+
+  .thumb-wrap:hover { border-color: var(--accent); transform: scale(1.03); }
+
+  .thumb-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .thumb-label {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    background: rgba(0,0,0,0.65);
+    color: #fff;
+    font-size: 0.65rem;
+    font-family: 'DM Mono', monospace;
+    padding: 3px 6px;
+    text-align: center;
+  }
+
+  /* Gallery header row */
+  .gallery-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+
+  .gallery-header h2 { margin-bottom: 0; }
+
+  #frame-count {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--accent);
+    background: rgba(107,140,255,0.12);
+    padding: 3px 10px;
+    border-radius: 99px;
+  }
+
+  /* hidden canvas */
+  #canvas { display: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Video → Frames</h1>
+  <p>Extrae imágenes de cualquier video directo en el navegador · sin subir nada a un servidor</p>
+</header>
+
+<!-- Drop zone -->
+<div class="card">
+  <h2>1 · Selecciona el video</h2>
+  <div id="drop-zone">
+    <input type="file" id="file-input" accept="video/*">
+    <div class="icon">🎬</div>
+    <p><strong>Haz clic</strong> o arrastra un archivo aquí</p>
+    <p>MP4 · MOV · AVI · MKV · WEBM · FLV · WMV y más</p>
+    <div id="file-name"></div>
+  </div>
+</div>
+
+<!-- Video preview -->
+<div class="card" id="preview-wrap">
+  <h2>Vista previa</h2>
+  <video id="preview" controls></video>
+  <div class="video-info">
+    <span>Duración: <b id="info-dur">—</b></span>
+    <span>Resolución: <b id="info-res">—</b></span>
+    <span>Frames est.: <b id="info-frames">—</b></span>
+  </div>
+</div>
+
+<!-- Controls -->
+<div class="card">
+  <h2>2 · Opciones de extracción</h2>
+  <div class="controls-grid">
+    <div>
+      <label for="fmt">Formato de salida</label>
+      <select id="fmt">
+        <option value="image/jpeg">JPG</option>
+        <option value="image/png">PNG</option>
+        <option value="image/webp">WebP</option>
+      </select>
+    </div>
+    <div>
+      <label for="quality">Calidad (JPG/WebP)</label>
+      <input type="number" id="quality" min="1" max="100" value="92">
+    </div>
+    <div>
+      <label for="mode">Modo de extracción</label>
+      <select id="mode">
+        <option value="interval">Cada N segundos</option>
+        <option value="fps">FPS fijo</option>
+        <option value="total">Total de frames</option>
+        <option value="range">Rango de tiempo</option>
+      </select>
+    </div>
+    <div id="param-wrap">
+      <label id="param-label" for="param-val">Intervalo (seg)</label>
+      <input type="number" id="param-val" min="0.1" step="0.1" value="1">
+    </div>
+
+    <!-- Range fields (hidden unless mode=range) -->
+    <div id="range-from-wrap" style="display:none">
+      <label for="range-from">Desde (seg)</label>
+      <input type="number" id="range-from" min="0" step="0.5" value="0">
+    </div>
+    <div id="range-to-wrap" style="display:none">
+      <label for="range-to">Hasta (seg)</label>
+      <input type="number" id="range-to" min="0" step="0.5" value="10">
+    </div>
+
+    <div class="range-row" id="scale-row">
+      <div style="flex:1">
+        <label>Escala de salida</label>
+        <input type="range" id="scale" min="10" max="100" value="100">
+      </div>
+      <span class="range-val" id="scale-val">100%</span>
+    </div>
+
+    <div>
+      <label for="max-frames">Límite máximo de frames</label>
+      <input type="number" id="max-frames" min="1" max="2000" value="300">
+    </div>
+  </div>
+</div>
+
+<!-- Actions -->
+<div class="card">
+  <h2>3 · Extraer</h2>
+  <div id="progress-wrap">
+    <div id="progress-bar-bg"><div id="progress-bar"></div></div>
+    <div id="progress-label">Preparando…</div>
+  </div>
+  <div class="btn-row" style="margin-top:14px">
+    <button id="btn-extract" disabled>▶ Extraer frames</button>
+    <button id="btn-download" id="btn-download">⬇ Descargar ZIP</button>
+    <button id="btn-clear">✕ Limpiar</button>
+  </div>
+</div>
+
+<!-- Gallery -->
+<div class="card" id="gallery-card">
+  <div class="gallery-header">
+    <h2>Frames extraídos</h2>
+    <span id="frame-count">0</span>
+  </div>
+  <div id="gallery"></div>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<!-- JSZip CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+<script>
+  const fileInput   = document.getElementById('file-input');
+  const dropZone    = document.getElementById('drop-zone');
+  const fileNameEl  = document.getElementById('file-name');
+  const previewWrap = document.getElementById('preview-wrap');
+  const preview     = document.getElementById('preview');
+  const infoDur     = document.getElementById('info-dur');
+  const infoRes     = document.getElementById('info-res');
+  const infoFrames  = document.getElementById('info-frames');
+  const fmtSel      = document.getElementById('fmt');
+  const qualityIn   = document.getElementById('quality');
+  const modeSel     = document.getElementById('mode');
+  const paramWrap   = document.getElementById('param-wrap');
+  const paramLabel  = document.getElementById('param-label');
+  const paramVal    = document.getElementById('param-val');
+  const rangeFromW  = document.getElementById('range-from-wrap');
+  const rangeToW    = document.getElementById('range-to-wrap');
+  const rangeFrom   = document.getElementById('range-from');
+  const rangeTo     = document.getElementById('range-to');
+  const scaleIn     = document.getElementById('scale');
+  const scaleVal    = document.getElementById('scale-val');
+  const maxFrames   = document.getElementById('max-frames');
+  const btnExtract  = document.getElementById('btn-extract');
+  const btnDownload = document.getElementById('btn-download');
+  const btnClear    = document.getElementById('btn-clear');
+  const progressWrap= document.getElementById('progress-wrap');
+  const progressBar = document.getElementById('progress-bar');
+  const progressLbl = document.getElementById('progress-label');
+  const galleryCard = document.getElementById('gallery-card');
+  const gallery     = document.getElementById('gallery');
+  const frameCount  = document.getElementById('frame-count');
+  const canvas      = document.getElementById('canvas');
+  const ctx         = canvas.getContext('2d');
+
+  let videoFile = null;
+  let extractedBlobs = [];
+  let extractedNames = [];
+  let aborted = false;
+
+  // ─── Drag & drop ───────────────────────────────────────────
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0];
+    if (f && f.type.startsWith('video/')) loadVideo(f);
+  });
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) loadVideo(fileInput.files[0]);
+  });
+
+  function loadVideo(file) {
+    videoFile = file;
+    fileNameEl.textContent = file.name;
+    const url = URL.createObjectURL(file);
+    preview.src = url;
+    previewWrap.style.display = 'block';
+    preview.onloadedmetadata = () => {
+      infoDur.textContent = formatTime(preview.duration);
+      infoRes.textContent = `${preview.videoWidth}×${preview.videoHeight}`;
+      updateEstimate();
+    };
+    btnExtract.disabled = false;
+    btnDownload.style.display = 'none';
+    clearGallery();
+  }
+
+  function formatTime(s) {
+    const m = Math.floor(s / 60);
+    const sec = (s % 60).toFixed(1);
+    return `${m}:${sec.padStart(4,'0')}`;
+  }
+
+  // ─── Mode change ───────────────────────────────────────────
+  const modeConfig = {
+    interval: { label: 'Intervalo (seg)', min: 0.1, step: 0.1, val: 1 },
+    fps:      { label: 'FPS a extraer',   min: 0.1, step: 0.1, val: 1 },
+    total:    { label: 'Total de frames', min: 1,   step: 1,   val: 30 },
+    range:    { label: 'Intervalo (seg)', min: 0.1, step: 0.1, val: 1 },
+  };
+
+  modeSel.addEventListener('change', () => {
+    const cfg = modeConfig[modeSel.value];
+    paramLabel.textContent = cfg.label;
+    paramVal.min   = cfg.min;
+    paramVal.step  = cfg.step;
+    paramVal.value = cfg.val;
+    const isRange = modeSel.value === 'range';
+    rangeFromW.style.display = isRange ? '' : 'none';
+    rangeToW.style.display   = isRange ? '' : 'none';
+    updateEstimate();
+  });
+
+  paramVal.addEventListener('input', updateEstimate);
+
+  function updateEstimate() {
+    if (!preview.duration) return;
+    const dur = preview.duration;
+    const mode = modeSel.value;
+    const v = parseFloat(paramVal.value) || 1;
+    let est;
+    if (mode === 'interval') est = Math.floor(dur / v) + 1;
+    else if (mode === 'fps')  est = Math.floor(dur * v);
+    else if (mode === 'total') est = Math.min(v, parseInt(maxFrames.value));
+    else { // range
+      const d = Math.max(0, parseFloat(rangeTo.value) - parseFloat(rangeFrom.value));
+      est = Math.floor(d / v) + 1;
+    }
+    infoFrames.textContent = Math.min(est, parseInt(maxFrames.value));
+  }
+
+  // ─── Scale slider ──────────────────────────────────────────
+  scaleIn.addEventListener('input', () => {
+    scaleVal.textContent = scaleIn.value + '%';
+  });
+
+  // ─── Extract ───────────────────────────────────────────────
+  btnExtract.addEventListener('click', extractFrames);
+
+  async function extractFrames() {
+    if (!videoFile) return;
+    aborted = false;
+    clearGallery();
+    extractedBlobs = [];
+    extractedNames = [];
+    btnExtract.textContent = '⏹ Detener';
+    btnExtract.onclick = () => { aborted = true; };
+    btnDownload.style.display = 'none';
+    progressWrap.style.display = 'block';
+    progressBar.style.width = '0%';
+
+    const fmt      = fmtSel.value;
+    const ext      = fmt === 'image/jpeg' ? 'jpg' : fmt === 'image/png' ? 'png' : 'webp';
+    const quality  = parseFloat(qualityIn.value) / 100;
+    const scale    = parseFloat(scaleIn.value) / 100;
+    const maxF     = parseInt(maxFrames.value);
+    const mode     = modeSel.value;
+    const v        = parseFloat(paramVal.value) || 1;
+
+    const vid = document.createElement('video');
+    vid.src = URL.createObjectURL(videoFile);
+    vid.muted = true;
+    vid.preload = 'auto';
+
+    await new Promise(res => {
+      vid.onloadedmetadata = res;
+      vid.onerror = res;
+    });
+
+    const dur = vid.duration;
+    let timestamps = [];
+
+    if (mode === 'interval') {
+      for (let t = 0; t <= dur + 0.001; t += v) timestamps.push(parseFloat(t.toFixed(3)));
+    } else if (mode === 'fps') {
+      const step = 1 / v;
+      for (let t = 0; t <= dur; t += step) timestamps.push(parseFloat(t.toFixed(3)));
+    } else if (mode === 'total') {
+      const total = Math.min(v, maxF);
+      const step = dur / (total - 1 || 1);
+      for (let i = 0; i < total; i++) timestamps.push(parseFloat((i * step).toFixed(3)));
+    } else { // range
+      const from = parseFloat(rangeFrom.value) || 0;
+      const to   = Math.min(parseFloat(rangeTo.value) || dur, dur);
+      for (let t = from; t <= to + 0.001; t += v) timestamps.push(parseFloat(t.toFixed(3)));
+    }
+
+    timestamps = timestamps.slice(0, maxF);
+    const total = timestamps.length;
+
+    for (let i = 0; i < total; i++) {
+      if (aborted) break;
+      const t = timestamps[i];
+      await seekTo(vid, t);
+
+      const w = Math.round(vid.videoWidth  * scale);
+      const h = Math.round(vid.videoHeight * scale);
+      canvas.width  = w;
+      canvas.height = h;
+      ctx.drawImage(vid, 0, 0, w, h);
+
+      const blob = await new Promise(res => canvas.toBlob(res, fmt, quality));
+      const name = `frame_${String(i + 1).padStart(4, '0')}_${t.toFixed(2).replace('.', 's')}${Math.floor((t % 1) * 100)}ms.${ext}`;
+      extractedBlobs.push(blob);
+      extractedNames.push(name);
+
+      addThumb(blob, name, t);
+
+      const pct = Math.round((i + 1) / total * 100);
+      progressBar.style.width = pct + '%';
+      progressLbl.textContent = `Frame ${i + 1} / ${total} · ${formatTime(t)}`;
+      frameCount.textContent  = `${i + 1} frames`;
+      galleryCard.style.display = 'block';
+    }
+
+    btnExtract.textContent = '▶ Extraer frames';
+    btnExtract.onclick = extractFrames;
+
+    if (extractedBlobs.length > 0) {
+      btnDownload.style.display = '';
+      progressLbl.textContent = `✓ ${extractedBlobs.length} frames listos`;
+    }
+
+    vid.src = '';
+  }
+
+  function seekTo(vid, time) {
+    return new Promise(res => {
+      vid.onseeked = res;
+      vid.currentTime = time;
+    });
+  }
+
+  function addThumb(blob, name, time) {
+    const url  = URL.createObjectURL(blob);
+    const wrap = document.createElement('div');
+    wrap.className = 'thumb-wrap';
+    wrap.title = name;
+    wrap.innerHTML = `<img src="${url}" alt="${name}"><div class="thumb-label">${formatTime(time)}</div>`;
+    // click to download single frame
+    wrap.addEventListener('click', () => {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      a.click();
+    });
+    gallery.appendChild(wrap);
+  }
+
+  // ─── Download ZIP ──────────────────────────────────────────
+  btnDownload.addEventListener('click', async () => {
+    if (!extractedBlobs.length) return;
+    btnDownload.disabled = true;
+    btnDownload.textContent = '⏳ Comprimiendo…';
+    const zip = new JSZip();
+    const folder = zip.folder('frames');
+    extractedBlobs.forEach((blob, i) => folder.file(extractedNames[i], blob));
+    const content = await zip.generateAsync({ type: 'blob' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(content);
+    const base = videoFile.name.replace(/\.[^.]+$/, '');
+    a.download = `${base}_frames.zip`;
+    a.click();
+    btnDownload.disabled = false;
+    btnDownload.textContent = '⬇ Descargar ZIP';
+  });
+
+  // ─── Clear ─────────────────────────────────────────────────
+  btnClear.addEventListener('click', () => {
+    videoFile = null;
+    fileInput.value = '';
+    fileNameEl.textContent = '';
+    preview.src = '';
+    previewWrap.style.display = 'none';
+    btnExtract.disabled = true;
+    btnDownload.style.display = 'none';
+    progressWrap.style.display = 'none';
+    clearGallery();
+    aborted = true;
+  });
+
+  function clearGallery() {
+    gallery.innerHTML = '';
+    galleryCard.style.display = 'none';
+    frameCount.textContent = '0 frames';
+    extractedBlobs = [];
+    extractedNames = [];
+  }
+</script>
+</body>
+</html>

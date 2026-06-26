@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Captura de Fotograma</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f0f11;
+      --surface: #1a1a1e;
+      --surface2: #222228;
+      --border: rgba(255,255,255,0.08);
+      --border-hover: rgba(255,255,255,0.15);
+      --text: #f0eff4;
+      --muted: #8b8a96;
+      --accent: #6c8aff;
+      --accent-bg: rgba(108,138,255,0.12);
+      --accent-border: rgba(108,138,255,0.35);
+      --success: #4caf82;
+      --success-bg: rgba(76,175,130,0.12);
+      --success-border: rgba(76,175,130,0.35);
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 2rem 1rem 4rem;
+    }
+
+    .app {
+      width: 100%;
+      max-width: 680px;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-bottom: 0.5rem;
+      border-bottom: 0.5px solid var(--border);
+    }
+
+    header i { font-size: 22px; color: var(--accent); }
+    header h1 { font-size: 17px; font-weight: 500; letter-spacing: -0.01em; }
+    header p { font-size: 13px; color: var(--muted); margin-top: 1px; }
+
+    .upload-zone {
+      border: 1.5px dashed var(--border-hover);
+      border-radius: var(--radius);
+      padding: 2.5rem 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      background: var(--surface);
+    }
+
+    .upload-zone:hover, .upload-zone.dragover {
+      border-color: var(--accent);
+      background: var(--accent-bg);
+    }
+
+    .upload-zone input { display: none; }
+
+    .upload-zone label {
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .upload-zone i { font-size: 36px; color: var(--muted); }
+    .upload-zone:hover i, .upload-zone.dragover i { color: var(--accent); }
+    .upload-zone .u-title { font-size: 15px; font-weight: 500; }
+    .upload-zone .u-sub { font-size: 13px; color: var(--muted); }
+
+    .file-pill {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      background: var(--surface);
+      border: 0.5px solid var(--border);
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-size: 13px;
+      color: var(--muted);
+      width: fit-content;
+      max-width: 100%;
+      overflow: hidden;
+    }
+
+    .file-pill span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-pill i { font-size: 15px; flex-shrink: 0; }
+
+    video {
+      width: 100%;
+      border-radius: var(--radius);
+      border: 0.5px solid var(--border);
+      display: none;
+      background: #000;
+    }
+
+    .controls-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 11px 16px;
+      font-size: 14px;
+      font-weight: 500;
+      border-radius: var(--radius-sm);
+      border: 0.5px solid;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+
+    .btn:active:not(:disabled) { transform: scale(0.98); }
+
+    .btn-capture {
+      background: var(--accent-bg);
+      color: var(--accent);
+      border-color: var(--accent-border);
+    }
+
+    .btn-capture:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    .btn-download {
+      background: var(--success-bg);
+      color: var(--success);
+      border-color: var(--success-border);
+      display: none;
+    }
+
+    .btn:hover:not(:disabled) { opacity: 0.8; }
+
+    .result-card {
+      display: none;
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--surface);
+    }
+
+    .result-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-bottom: 0.5px solid var(--border);
+      font-size: 13px;
+      color: var(--muted);
+      background: var(--surface2);
+    }
+
+    .result-header i { font-size: 15px; }
+
+    .result-card img {
+      width: 100%;
+      display: block;
+    }
+
+    canvas { display: none; }
+  </style>
+</head>
+<body>
+  <div class="app">
+
+    <header>
+      <i class="ti ti-camera"></i>
+      <div>
+        <h1>Captura de fotograma</h1>
+        <p>Extrae una imagen de cualquier momento del video</p>
+      </div>
+    </header>
+
+    <div class="upload-zone" id="dropZone">
+      <label for="videoInput">
+        <i class="ti ti-video"></i>
+        <span class="u-title">Selecciona o arrastra un video</span>
+        <span class="u-sub">MP4, MOV, AVI y otros formatos</span>
+      </label>
+      <input type="file" id="videoInput" accept="video/*">
+    </div>
+
+    <div class="file-pill" id="filePill">
+      <i class="ti ti-file-video"></i>
+      <span id="filenameText"></span>
+    </div>
+
+    <video id="videoPlayer" controls></video>
+
+    <div class="controls-row">
+      <button class="btn btn-capture" id="captureBtn" disabled>
+        <i class="ti ti-camera"></i> Capturar fotograma
+      </button>
+      <button class="btn btn-download" id="downloadBtn">
+        <i class="ti ti-download"></i> Descargar imagen
+      </button>
+    </div>
+
+    <div class="result-card" id="resultCard">
+      <div class="result-header">
+        <i class="ti ti-photo"></i>
+        <span id="resultMeta">Fotograma extraído</span>
+      </div>
+      <img id="resultImg" alt="Fotograma extraído">
+    </div>
+
+    <canvas id="videoCanvas"></canvas>
+  </div>
+
+  <script>
+    const videoInput = document.getElementById('videoInput');
+    const videoPlayer = document.getElementById('videoPlayer');
+    const captureBtn = document.getElementById('captureBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const canvas = document.getElementById('videoCanvas');
+    const resultCard = document.getElementById('resultCard');
+    const resultImg = document.getElementById('resultImg');
+    const resultMeta = document.getElementById('resultMeta');
+    const filePill = document.getElementById('filePill');
+    const filenameText = document.getElementById('filenameText');
+    const dropZone = document.getElementById('dropZone');
+    const ctx = canvas.getContext('2d');
+    let currentFilename = 'fotograma';
+    let currentDataUrl = null;
+
+    function loadFile(file) {
+      if (!file || !file.type.startsWith('video/')) return;
+      currentFilename = file.name.replace(/\.[^.]+$/, '');
+      filenameText.textContent = file.name;
+      filePill.style.display = 'flex';
+      videoPlayer.src = URL.createObjectURL(file);
+      videoPlayer.style.display = 'block';
+      captureBtn.disabled = false;
+      resultCard.style.display = 'none';
+      downloadBtn.style.display = 'none';
+    }
+
+    videoInput.addEventListener('change', (e) => loadFile(e.target.files[0]));
+
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      loadFile(e.dataTransfer.files[0]);
+    });
+
+    captureBtn.addEventListener('click', () => {
+      canvas.width = videoPlayer.videoWidth;
+      canvas.height = videoPlayer.videoHeight;
+      ctx.drawImage(videoPlayer, 0, 0, canvas.width, canvas.height);
+      currentDataUrl = canvas.toDataURL('image/jpeg', 0.95);
+      resultImg.src = currentDataUrl;
+      resultCard.style.display = 'block';
+      downloadBtn.style.display = 'flex';
+      const t = videoPlayer.currentTime;
+      const min = String(Math.floor(t / 60)).padStart(2, '0');
+      const sec = String(Math.floor(t % 60)).padStart(2, '0');
+      resultMeta.textContent = `Fotograma en ${min}:${sec} — ${canvas.width}×${canvas.height}px`;
+      resultCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+
+    downloadBtn.addEventListener('click', () => {
+      const a = document.createElement('a');
+      a.href = currentDataUrl;
+      a.download = `${currentFilename}_fotograma.jpg`;
+      a.click();
+    });
+  </script>
+</body>
+</html>
