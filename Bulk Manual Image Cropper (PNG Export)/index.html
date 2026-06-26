@@ -3,168 +3,616 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bulk Image Cropper to PNG</title>
+    <title>Bulk Image Cropper</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; margin: 0; display: flex; flex-direction: column; align-items: center; }
-        .container { background: white; max-width: 900px; width: 95%; margin: 20px; padding: 25px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
-        .crop-area { width: 100%; height: 550px; margin-top: 20px; background-color: #222; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-        img { max-width: 100%; display: block; }
-        .controls { display: flex; gap: 15px; margin-bottom: 20px; align-items: center; flex-wrap: wrap; border-bottom: 1px solid #eee; padding-bottom: 20px; }
-        .btn { padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.3s; font-size: 14px; }
-        .btn-primary { background: #007bff; color: white; }
-        .btn-next { background: #28a745; color: white; display: none; }
-        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
-        .btn:active { transform: translateY(0); }
-        #status { font-weight: bold; color: #444; margin: 10px 0; padding: 10px; background: #e9ecef; border-radius: 6px; width: 100%; box-sizing: border-box; }
-        .input-group { display: flex; align-items: center; gap: 8px; background: #f8f9fa; padding: 8px 12px; border-radius: 6px; border: 1px solid #ddd; }
-        input[type="number"] { width: 70px; padding: 6px; border: 1px solid #ccc; border-radius: 4px; }
-        input[type="file"] { font-size: 0.9rem; }
-        h2 { margin-top: 0; color: #333; }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #0e0f11;
+            --surface: #16181c;
+            --surface2: #1e2127;
+            --surface3: #252830;
+            --border: rgba(255,255,255,0.07);
+            --border-active: rgba(255,255,255,0.18);
+            --text: #e8eaed;
+            --text-muted: #7c8490;
+            --text-dim: #4a5060;
+            --accent: #5b8fff;
+            --accent-hover: #7aa3ff;
+            --accent-dim: rgba(91,143,255,0.12);
+            --green: #3ecf8e;
+            --green-dim: rgba(62,207,142,0.12);
+            --radius: 10px;
+            --radius-lg: 16px;
+        }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 32px 16px 64px;
+        }
+
+        .header {
+            width: 100%;
+            max-width: 860px;
+            margin-bottom: 28px;
+        }
+
+        .header h1 {
+            font-size: 22px;
+            font-weight: 600;
+            letter-spacing: -0.3px;
+            color: var(--text);
+        }
+
+        .header p {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            width: 100%;
+            max-width: 860px;
+            padding: 24px;
+        }
+
+        /* ── PRESET GRID ── */
+        .section-label {
+            font-size: 11px;
+            font-weight: 500;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            margin-bottom: 10px;
+        }
+
+        .preset-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .preset-btn {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 10px 8px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            transition: border-color 0.15s, background 0.15s;
+            font-family: 'DM Sans', sans-serif;
+        }
+
+        .preset-btn:hover {
+            border-color: var(--border-active);
+            background: var(--surface3);
+        }
+
+        .preset-btn.active {
+            border-color: var(--accent);
+            background: var(--accent-dim);
+        }
+
+        .preset-thumb {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .preset-thumb .shape {
+            background: var(--text-dim);
+            border-radius: 2px;
+            transition: background 0.15s;
+        }
+
+        .preset-btn.active .shape {
+            background: var(--accent);
+        }
+
+        .preset-name {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text);
+            text-align: center;
+        }
+
+        .preset-size {
+            font-family: 'DM Mono', monospace;
+            font-size: 10px;
+            color: var(--text-muted);
+        }
+
+        /* ── CUSTOM SIZE ── */
+        .custom-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 14px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .custom-row label {
+            font-size: 13px;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        .custom-row input[type="number"] {
+            width: 72px;
+            background: var(--surface3);
+            border: 1px solid var(--border-active);
+            border-radius: 6px;
+            color: var(--text);
+            font-family: 'DM Mono', monospace;
+            font-size: 13px;
+            padding: 6px 8px;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+
+        .custom-row input[type="number"]:focus {
+            border-color: var(--accent);
+        }
+
+        .custom-row .sep {
+            color: var(--text-dim);
+            font-size: 16px;
+        }
+
+        .custom-apply-btn {
+            background: var(--surface3);
+            border: 1px solid var(--border-active);
+            border-radius: 6px;
+            color: var(--text);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 12px;
+            font-weight: 500;
+            padding: 6px 14px;
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s;
+            white-space: nowrap;
+        }
+
+        .custom-apply-btn:hover {
+            background: var(--accent-dim);
+            border-color: var(--accent);
+            color: var(--accent-hover);
+        }
+
+        /* ── DIVIDER ── */
+        .divider {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 20px 0;
+        }
+
+        /* ── FILE ROW ── */
+        .file-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .file-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--surface2);
+            border: 1px dashed var(--border-active);
+            border-radius: var(--radius);
+            padding: 10px 16px;
+            cursor: pointer;
+            font-size: 13px;
+            color: var(--text-muted);
+            transition: border-color 0.15s, color 0.15s;
+            flex: 1;
+            min-width: 180px;
+        }
+
+        .file-label:hover {
+            border-color: var(--accent);
+            color: var(--accent-hover);
+        }
+
+        .file-label input[type="file"] {
+            display: none;
+        }
+
+        .file-icon {
+            font-size: 18px;
+        }
+
+        #fileCount {
+            font-family: 'DM Mono', monospace;
+            font-size: 12px;
+            color: var(--text-muted);
+            background: var(--surface3);
+            padding: 4px 10px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            white-space: nowrap;
+        }
+
+        .btn-start {
+            background: var(--accent);
+            border: none;
+            border-radius: var(--radius);
+            color: #fff;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            padding: 10px 22px;
+            cursor: pointer;
+            transition: background 0.15s, transform 0.1s;
+            white-space: nowrap;
+        }
+
+        .btn-start:hover { background: var(--accent-hover); }
+        .btn-start:active { transform: scale(0.97); }
+        .btn-start:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        /* ── STATUS ── */
+        .status-bar {
+            margin-top: 16px;
+            padding: 10px 14px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            font-size: 13px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-bar.active { border-color: var(--accent); color: var(--text); }
+        .status-bar.done { border-color: var(--green); color: var(--green); }
+
+        .progress-track {
+            height: 3px;
+            background: var(--surface3);
+            border-radius: 2px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 2px;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        /* ── CROPPER ── */
+        .crop-wrapper {
+            margin-top: 20px;
+            background: #0a0b0d;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            height: 520px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .crop-wrapper.hidden { display: none; }
+
+        .crop-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-dim);
+        }
+
+        .crop-placeholder svg { opacity: 0.3; }
+
+        .crop-placeholder p { font-size: 13px; }
+
+        #imageToCrop { max-width: 100%; display: block; }
+
+        /* ── BOTTOM ROW ── */
+        .bottom-row {
+            margin-top: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .credit {
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+
+        .btn-crop-next {
+            background: var(--green);
+            border: none;
+            border-radius: var(--radius);
+            color: #0e1a14;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            padding: 10px 22px;
+            cursor: pointer;
+            display: none;
+            align-items: center;
+            gap: 6px;
+            transition: opacity 0.15s, transform 0.1s;
+        }
+
+        .btn-crop-next:hover { opacity: 0.9; }
+        .btn-crop-next:active { transform: scale(0.97); }
+
+        /* ── CROPPER OVERRIDES ── */
+        .cropper-view-box, .cropper-face { border-radius: 0; }
+        .cropper-line { background: var(--accent); }
+        .cropper-point { background: var(--accent); width: 8px; height: 8px; }
+        .cropper-modal { background: #000; opacity: 0.65; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2>Bulk Manual Image Cropper (PNG Export)</h2>
-    
-    <div class="controls">
-        <div class="input-group">
-            <label>Final Size (px):</label>
-            <input type="number" id="width" value="512"> 
-            <span>x</span> 
-            <input type="number" id="height" value="512">
-        </div>
-        <input type="file" id="fileInput" multiple accept="image/*">
-        <button class="btn btn-primary" id="startBtn">Start Processing</button>
+<div class="header">
+    <h1>Bulk Image Cropper</h1>
+    <p>Crop multiple images to exact dimensions and export as PNG.</p>
+</div>
+
+<div class="card">
+
+    <div class="section-label">Crop preset</div>
+    <div class="preset-grid" id="presetGrid">
+        <!-- filled by JS -->
     </div>
 
-    <div id="status">Select images to get started.</div>
+    <div class="custom-row" id="customRow">
+        <label>Custom:</label>
+        <input type="number" id="width" value="512" min="1">
+        <span class="sep">×</span>
+        <input type="number" id="height" value="512" min="1">
+        <span class="sep" style="font-size:12px; color:var(--text-dim)">px</span>
+        <button class="custom-apply-btn" id="applyCustom">Apply custom</button>
+    </div>
 
-    <div class="crop-area">
+    <hr class="divider">
+
+    <div class="file-row">
+        <label class="file-label">
+            <span class="file-icon">📂</span>
+            <span>Choose images…</span>
+            <input type="file" id="fileInput" multiple accept="image/*">
+        </label>
+        <span id="fileCount">No files</span>
+        <button class="btn-start" id="startBtn">Start cropping</button>
+    </div>
+
+    <div class="status-bar" id="statusBar">
+        <span id="statusText">Select images to get started.</span>
+    </div>
+    <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+
+    <div class="crop-wrapper hidden" id="cropWrapper">
         <img id="imageToCrop" src="" alt="">
     </div>
 
-    <div style="margin-top: 20px; text-align: right; display: flex; justify-content: space-between; align-items: center;">
-        <small style="color: #777;">Created by • Isaac-maker </small>
-        <button class="btn btn-next" id="nextBtn">Crop and Next ➔</button>
+    <div id="placeholder" class="crop-wrapper" style="height:160px;">
+        <div class="crop-placeholder">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+                <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18"/>
+            </svg>
+            <p>Crop area will appear here</p>
+        </div>
     </div>
+
+    <div class="bottom-row">
+        <span class="credit">isaac-maker</span>
+        <button class="btn-crop-next" id="nextBtn">
+            Crop &amp; Next
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </button>
+    </div>
+
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
-
 <script>
-    let cropper;
-    let files = [];
-    let currentIndex = 0;
-    let zip = new JSZip();
+const PRESETS = [
+    { name: "Square SM",   w: 512,  h: 512,  shape: [28, 28] },
+    { name: "Square MD",   w: 1024, h: 1024, shape: [28, 28] },
+    { name: "Square LG",   w: 2048, h: 2048, shape: [28, 28] },
+    { name: "Portrait",    w: 512,  h: 768,  shape: [20, 30] },
+    { name: "Portrait XL", w: 768,  h: 1152, shape: [20, 30] },
+    { name: "Landscape",   w: 768,  h: 512,  shape: [30, 20] },
+    { name: "Landscape XL",w: 1152, h: 768,  shape: [30, 20] },
+    { name: "Wide 16:9",   w: 1920, h: 1080, shape: [32, 18] },
+    { name: "Custom",      w: null, h: null, shape: [24, 24] },
+];
 
-    const fileInput = document.getElementById('fileInput');
-    const imageElement = document.getElementById('imageToCrop');
-    const startBtn = document.getElementById('startBtn');
-    const nextBtn = document.getElementById('nextBtn');
-    const status = document.getElementById('status');
+let activePresetIdx = 0;
+let targetW = 512, targetH = 512;
+let cropper, files = [], currentIndex = 0, zip;
 
-    startBtn.onclick = () => {
-        files = Array.from(fileInput.files);
-        if (files.length === 0) {
-            alert("Please select at least one image.");
-            return;
-        }
-        
-        // Reset ZIP and counter for a new batch
-        zip = new JSZip();
-        currentIndex = 0;
-        startBtn.style.display = 'none';
-        nextBtn.style.display = 'inline-block';
-        loadNextImage();
-    };
+const presetGrid  = document.getElementById('presetGrid');
+const fileInput   = document.getElementById('fileInput');
+const fileCount   = document.getElementById('fileCount');
+const startBtn    = document.getElementById('startBtn');
+const nextBtn     = document.getElementById('nextBtn');
+const statusText  = document.getElementById('statusText');
+const statusBar   = document.getElementById('statusBar');
+const progressFill= document.getElementById('progressFill');
+const cropWrapper = document.getElementById('cropWrapper');
+const placeholder = document.getElementById('placeholder');
+const imageEl     = document.getElementById('imageToCrop');
+const widthIn     = document.getElementById('width');
+const heightIn    = document.getElementById('height');
+const customRow   = document.getElementById('customRow');
 
-    function loadNextImage() {
-        if (currentIndex >= files.length) {
-            finishZip();
-            return;
-        }
+// Build preset buttons
+PRESETS.forEach((p, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'preset-btn' + (i === 0 ? ' active' : '');
+    btn.dataset.idx = i;
 
-        status.innerText = `Editing image ${currentIndex + 1} of ${files.length}: ${files[currentIndex].name}`;
-        
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            if (cropper) cropper.destroy();
-            
-            imageElement.src = e.target.result;
-            
-            const targetW = parseInt(document.getElementById('width').value) || 512;
-            const targetH = parseInt(document.getElementById('height').value) || 512;
+    const [sw, sh] = p.shape;
+    const sizeLabel = p.w ? `${p.w}×${p.h}` : 'custom';
 
-            cropper = new Cropper(imageElement, {
-                aspectRatio: targetW / targetH,
-                viewMode: 1, 
-                autoCropArea: 0.8,
-                responsive: true,
-                restore: false,
-                guides: true,
-                center: true,
-                highlight: false,
-                cropBoxMovable: true,
-                cropBoxResizable: true,
-                toggleDragModeOnDblclick: false,
-            });
-        };
-        reader.readAsDataURL(files[currentIndex]);
+    btn.innerHTML = `
+        <div class="preset-thumb">
+            <div class="shape" style="width:${sw}px;height:${sh}px;"></div>
+        </div>
+        <span class="preset-name">${p.name}</span>
+        <span class="preset-size">${sizeLabel}</span>
+    `;
+    btn.onclick = () => selectPreset(i);
+    presetGrid.appendChild(btn);
+});
+
+function selectPreset(idx) {
+    activePresetIdx = idx;
+    document.querySelectorAll('.preset-btn').forEach((b, i) =>
+        b.classList.toggle('active', i === idx));
+
+    const p = PRESETS[idx];
+    if (p.w) {
+        targetW = p.w; targetH = p.h;
+        widthIn.value = p.w; heightIn.value = p.h;
+        customRow.style.opacity = '0.45';
+        customRow.style.pointerEvents = 'none';
+    } else {
+        customRow.style.opacity = '1';
+        customRow.style.pointerEvents = '';
+        targetW = parseInt(widthIn.value) || 512;
+        targetH = parseInt(heightIn.value) || 512;
     }
 
-    nextBtn.onclick = () => {
-        const targetW = parseInt(document.getElementById('width').value) || 512;
-        const targetH = parseInt(document.getElementById('height').value) || 512;
+    if (cropper) {
+        cropper.setAspectRatio(targetW / targetH);
+    }
+}
 
-        // 1. Get canvas with the exact defined size
-        const canvas = cropper.getCroppedCanvas({
-            width: targetW,
-            height: targetH,
-            imageSmoothingEnabled: true,
-            imageSmoothingQuality: 'high'
+document.getElementById('applyCustom').onclick = () => {
+    targetW = parseInt(widthIn.value) || 512;
+    targetH = parseInt(heightIn.value) || 512;
+    if (cropper) cropper.setAspectRatio(targetW / targetH);
+};
+
+fileInput.onchange = () => {
+    const n = fileInput.files.length;
+    fileCount.textContent = n === 0 ? 'No files' : `${n} image${n > 1 ? 's' : ''}`;
+};
+
+startBtn.onclick = () => {
+    files = Array.from(fileInput.files);
+    if (!files.length) { alert('Please select at least one image.'); return; }
+    zip = new JSZip();
+    currentIndex = 0;
+    startBtn.disabled = true;
+    nextBtn.style.display = 'flex';
+    placeholder.style.display = 'none';
+    cropWrapper.classList.remove('hidden');
+    loadNextImage();
+};
+
+function setStatus(msg, mode = '') {
+    statusText.textContent = msg;
+    statusBar.className = 'status-bar' + (mode ? ' ' + mode : '');
+}
+
+function setProgress(n, total) {
+    progressFill.style.width = total ? `${Math.round((n / total) * 100)}%` : '0%';
+}
+
+function loadNextImage() {
+    if (currentIndex >= files.length) { finishZip(); return; }
+    setStatus(`Image ${currentIndex + 1} of ${files.length} — ${files[currentIndex].name}`, 'active');
+    setProgress(currentIndex, files.length);
+
+    const reader = new FileReader();
+    reader.onload = e => {
+        if (cropper) cropper.destroy();
+        imageEl.src = e.target.result;
+        cropper = new Cropper(imageEl, {
+            aspectRatio: targetW / targetH,
+            viewMode: 1,
+            autoCropArea: 0.85,
+            responsive: true,
+            restore: false,
+            guides: true,
+            center: true,
+            highlight: false,
+            cropBoxMovable: true,
+            cropBoxResizable: true,
+            toggleDragModeOnDblclick: false,
         });
-
-        // 2. Convert to Blob forcing image/png format
-        canvas.toBlob((blob) => {
-            // Get original name without extension
-            const originalFullName = files[currentIndex].name;
-            const fileNameWithoutExt = originalFullName.substring(0, originalFullName.lastIndexOf('.')) || originalFullName;
-            
-            // 3. Save to ZIP with .png extension
-            zip.file(`${fileNameWithoutExt}.png`, blob);
-            
-            currentIndex++;
-            loadNextImage();
-        }, 'image/png'); 
     };
+    reader.readAsDataURL(files[currentIndex]);
+}
 
-    async function finishZip() {
-        status.innerText = "Generating ZIP file... please wait.";
-        
-        try {
-            const content = await zip.generateAsync({type: "blob"});
-            saveAs(content, "cropped_images_png.zip");
-            
-            status.innerText = "Done! The process has finished and your download has started.";
-            nextBtn.style.display = 'none';
-            startBtn.style.display = 'inline-block';
-            startBtn.innerText = "Process another batch";
-            
-            // Cleanup
-            fileInput.value = "";
-            if (cropper) cropper.destroy();
-            imageElement.src = "";
-        } catch (err) {
-            console.error(err);
-            status.innerText = "Error generating the ZIP file.";
-        }
+nextBtn.onclick = () => {
+    const canvas = cropper.getCroppedCanvas({
+        width: targetW, height: targetH,
+        imageSmoothingEnabled: true,
+        imageSmoothingQuality: 'high'
+    });
+    canvas.toBlob(blob => {
+        const orig = files[currentIndex].name;
+        const base = orig.substring(0, orig.lastIndexOf('.')) || orig;
+        zip.file(`${base}.png`, blob);
+        currentIndex++;
+        loadNextImage();
+    }, 'image/png');
+};
+
+async function finishZip() {
+    setStatus('Generating ZIP…', 'active');
+    setProgress(files.length, files.length);
+    nextBtn.style.display = 'none';
+    cropWrapper.classList.add('hidden');
+    placeholder.style.display = 'flex';
+
+    try {
+        const content = await zip.generateAsync({ type: 'blob' });
+        saveAs(content, 'cropped_images.zip');
+        setStatus(`Done! ${files.length} image${files.length > 1 ? 's' : ''} exported.`, 'done');
+        progressFill.style.background = 'var(--green)';
+    } catch (err) {
+        setStatus('Error generating ZIP.', '');
     }
-</script>
 
+    startBtn.disabled = false;
+    startBtn.textContent = 'Process another batch';
+    fileInput.value = '';
+    fileCount.textContent = 'No files';
+    if (cropper) { cropper.destroy(); cropper = null; }
+    imageEl.src = '';
+}
+
+// Init custom row state
+selectPreset(0);
+</script>
 </body>
 </html>
-
