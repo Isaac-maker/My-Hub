@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vista Previa de Video</title>
+<style>
+  :root{
+    --bg:#12161c;
+    --panel:#1a2029;
+    --panel-2:#212836;
+    --border:#2c3444;
+    --text:#e7ebf1;
+    --text-dim:#8b95a7;
+    --accent:#5b7fdb;
+    --accent-2:#42506b;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Segoe UI',Roboto,Arial,sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    min-height:100vh;
+    padding:24px 16px 60px;
+  }
+  .wrap{max-width:900px;margin:0 auto;}
+  h1{font-size:1.4rem;font-weight:600;margin:0 0 4px;}
+  .sub{color:var(--text-dim);font-size:.9rem;margin-bottom:24px;}
+
+  .drop{
+    border:2px dashed var(--border);
+    border-radius:12px;
+    padding:36px 20px;
+    text-align:center;
+    background:var(--panel);
+    cursor:pointer;
+    transition:border-color .15s, background .15s;
+  }
+  .drop:hover, .drop.drag{border-color:var(--accent); background:var(--panel-2);}
+  .drop p{margin:6px 0;color:var(--text-dim);}
+  .drop strong{color:var(--text);}
+  input[type=file]{display:none;}
+
+  .status{margin-top:16px;font-size:.9rem;color:var(--text-dim);min-height:1.2em;}
+  .progress{
+    width:100%;height:6px;border-radius:3px;background:var(--panel-2);
+    overflow:hidden;margin-top:8px;display:none;
+  }
+  .progress-bar{height:100%;width:0%;background:var(--accent);transition:width .15s;}
+
+  .result{display:none;margin-top:28px;}
+  .card{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:12px;
+    overflow:hidden;
+  }
+  #sheetCanvas{width:100%;display:block;}
+
+  .actions{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;}
+  button{
+    background:var(--accent);
+    color:#fff;
+    border:none;
+    padding:10px 18px;
+    border-radius:8px;
+    font-size:.9rem;
+    font-weight:600;
+    cursor:pointer;
+  }
+  button:hover{filter:brightness(1.08);}
+  button.secondary{background:var(--accent-2);}
+  button:disabled{opacity:.5;cursor:not-allowed;}
+
+  video{display:none;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Vista Previa de Video (Contact Sheet)</h1>
+  <div class="sub">Sube un video y genera una imagen con 16 cuadros en orden cronológico. Todo se procesa en tu navegador, sin conexión a internet.</div>
+
+  <div class="drop" id="drop">
+    <p><strong>Haz clic para elegir un video</strong> o arrástralo aquí</p>
+    <p>MP4, WebM, MOV, etc. (según lo que tu navegador soporte)</p>
+    <input type="file" id="fileInput" accept="video/*">
+  </div>
+
+  <div class="status" id="status"></div>
+  <div class="progress" id="progressWrap"><div class="progress-bar" id="progressBar"></div></div>
+
+  <div class="result" id="result">
+    <div class="card">
+      <canvas id="sheetCanvas"></canvas>
+    </div>
+    <div class="actions">
+      <button id="downloadBtn">Descargar imagen (PNG)</button>
+      <button class="secondary" id="resetBtn">Elegir otro video</button>
+    </div>
+  </div>
+</div>
+
+<video id="video" muted playsinline></video>
+
+<script>
+const COLS = 4, ROWS = 4, FRAME_COUNT = COLS * ROWS;
+const THUMB_W = 320; // ancho de cada miniatura en el sheet
+const HEADER_H = 90;
+const GAP = 3;
+
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('fileInput');
+const statusEl = document.getElementById('status');
+const progressWrap = document.getElementById('progressWrap');
+const progressBar = document.getElementById('progressBar');
+const resultEl = document.getElementById('result');
+const canvas = document.getElementById('sheetCanvas');
+const ctx = canvas.getContext('2d');
+const video = document.getElementById('video');
+const downloadBtn = document.getElementById('downloadBtn');
+const resetBtn = document.getElementById('resetBtn');
+
+let currentFileName = '';
+let generatedBlobUrl = null;
+
+drop.addEventListener('click', () => fileInput.click());
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('drag'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('drag'));
+drop.addEventListener('drop', e => {
+  e.preventDefault();
+  drop.classList.remove('drag');
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', e => {
+  if (e.target.files.length) handleFile(e.target.files[0]);
+});
+
+resetBtn.addEventListener('click', () => {
+  resultEl.style.display = 'none';
+  statusEl.textContent = '';
+  progressWrap.style.display = 'none';
+  fileInput.value = '';
+  if (generatedBlobUrl) URL.revokeObjectURL(generatedBlobUrl);
+});
+
+downloadBtn.addEventListener('click', () => {
+  canvas.toBlob(blob => {
+    if (!blob) {
+      statusEl.textContent = 'No se pudo generar la imagen (posible restricción de seguridad del navegador con file://). Prueba sirviendo el archivo con un servidor local o desde GitHub Pages.';
+      return;
+    }
+    if (generatedBlobUrl) URL.revokeObjectURL(generatedBlobUrl);
+    generatedBlobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = generatedBlobUrl;
+    const base = currentFileName.replace(/\.[^/.]+$/, '') || 'video';
+    a.download = base + '_preview.png';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }, 'image/png');
+});
+
+function formatSize(bytes) {
+  const mb = bytes / (1024 * 1024);
+  if (mb >= 1024) return (mb / 1024).toFixed(2) + ' GB';
+  return mb.toFixed(2) + ' MB';
+}
+
+function formatDuration(sec) {
+  sec = Math.round(sec);
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  const pad = n => String(n).padStart(2, '0');
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
+
+function seekTo(time) {
+  return new Promise((resolve, reject) => {
+    const onSeeked = () => {
+      video.removeEventListener('seeked', onSeeked);
+      video.removeEventListener('error', onError);
+      resolve();
+    };
+    const onError = (e) => {
+      video.removeEventListener('seeked', onSeeked);
+      video.removeEventListener('error', onError);
+      reject(e);
+    };
+    video.addEventListener('seeked', onSeeked);
+    video.addEventListener('error', onError);
+    video.currentTime = time;
+  });
+}
+
+async function handleFile(file) {
+  if (!file.type.startsWith('video/')) {
+    statusEl.textContent = 'Por favor selecciona un archivo de video válido.';
+    return;
+  }
+
+  currentFileName = file.name;
+  resultEl.style.display = 'none';
+  progressWrap.style.display = 'block';
+  progressBar.style.width = '0%';
+  statusEl.textContent = 'Cargando metadatos del video...';
+
+  const url = URL.createObjectURL(file);
+  video.src = url;
+
+  try {
+    await new Promise((resolve, reject) => {
+      video.addEventListener('loadedmetadata', resolve, { once: true });
+      video.addEventListener('error', reject, { once: true });
+    });
+
+    const duration = video.duration;
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+
+    if (!vw || !vh || !isFinite(duration) || duration <= 0) {
+      throw new Error('NO_DECODE');
+    }
+
+    const thumbH = Math.round(THUMB_W * (vh / vw));
+
+    // Preparar canvas del sheet
+    const sheetW = COLS * THUMB_W + (COLS + 1) * GAP;
+    const sheetH = HEADER_H + ROWS * thumbH + (ROWS + 1) * GAP;
+    canvas.width = sheetW;
+    canvas.height = sheetH;
+
+    // Fondo
+    ctx.fillStyle = '#12161c';
+    ctx.fillRect(0, 0, sheetW, sheetH);
+
+    // Header
+    ctx.fillStyle = '#1a2029';
+    ctx.fillRect(0, 0, sheetW, HEADER_H);
+    ctx.strokeStyle = '#2c3444';
+    ctx.beginPath();
+    ctx.moveTo(0, HEADER_H);
+    ctx.lineTo(sheetW, HEADER_H);
+    ctx.stroke();
+
+    ctx.fillStyle = '#e7ebf1';
+    ctx.font = 'bold 20px Arial';
+    ctx.textBaseline = 'top';
+    let displayName = file.name;
+    // truncar si es muy largo
+    const maxNameWidth = sheetW - 24;
+    while (ctx.measureText(displayName).width > maxNameWidth && displayName.length > 4) {
+      displayName = displayName.slice(0, -5) + '...';
+    }
+    ctx.fillText(displayName, 12, 12);
+
+    ctx.fillStyle = '#8b95a7';
+    ctx.font = '14px Arial';
+    const infoLine = `Duración: ${formatDuration(duration)}    Tamaño: ${formatSize(file.size)}    Resolución: ${vw}x${vh}`;
+    ctx.fillText(infoLine, 12, 42);
+
+    // Offscreen canvas para capturar cada cuadro
+    const off = document.createElement('canvas');
+    off.width = vw;
+    off.height = vh;
+    const offCtx = off.getContext('2d');
+
+    // Calcular timestamps en orden cronológico, evitando el primer/último frame exactos
+    const timestamps = [];
+    for (let i = 0; i < FRAME_COUNT; i++) {
+      const t = (duration * (i + 0.5)) / FRAME_COUNT;
+      timestamps.push(Math.min(t, Math.max(duration - 0.05, 0)));
+    }
+
+    for (let i = 0; i < FRAME_COUNT; i++) {
+      statusEl.textContent = `Extrayendo cuadro ${i + 1} de ${FRAME_COUNT}...`;
+      progressBar.style.width = `${Math.round(((i + 1) / FRAME_COUNT) * 100)}%`;
+
+      await seekTo(timestamps[i]);
+      offCtx.drawImage(video, 0, 0, vw, vh);
+
+      const col = i % COLS;
+      const row = Math.floor(i / COLS);
+      const x = GAP + col * (THUMB_W + GAP);
+      const y = HEADER_H + GAP + row * (thumbH + GAP);
+
+      ctx.drawImage(off, 0, 0, vw, vh, x, y, THUMB_W, thumbH);
+
+      // marca de tiempo sobre cada cuadro
+      const label = formatDuration(timestamps[i]);
+      ctx.font = 'bold 12px Arial';
+      const tw = ctx.measureText(label).width + 8;
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(x + 4, y + thumbH - 20, tw, 16);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(label, x + 8, y + thumbH - 18);
+    }
+
+    statusEl.textContent = '¡Listo!';
+    progressWrap.style.display = 'none';
+    resultEl.style.display = 'block';
+  } catch (err) {
+    console.error(err);
+    if (location.protocol === 'file:') {
+      statusEl.textContent = 'No se pudo procesar el video. Estás abriendo este archivo directamente (file://), lo cual bloquea el acceso al video en muchos navegadores. Sírvelo con un servidor local (ej: "python -m http.server") o pruébalo ya subido a GitHub Pages.';
+    } else {
+      statusEl.textContent = 'Ocurrió un error al procesar el video. Intenta con otro archivo o navegador.';
+    }
+    progressWrap.style.display = 'none';
+    resultEl.style.display = 'none';
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+</script>
+</body>
+</html>
