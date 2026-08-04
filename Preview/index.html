@@ -216,6 +216,34 @@ async function handleFile(file) {
       video.addEventListener('error', reject, { once: true });
     });
 
+    // Algunos videos (ciertos MP4/WebM) reportan duration=Infinity hasta
+    // que se hace un "seek" grande. Lo forzamos aquí para corregirlo.
+    if (!isFinite(video.duration) || video.duration === 0) {
+      await new Promise((resolve) => {
+        const onDurationChange = () => {
+          if (isFinite(video.duration) && video.duration > 0) {
+            video.removeEventListener('durationchange', onDurationChange);
+            video.currentTime = 0;
+            resolve();
+          }
+        };
+        video.addEventListener('durationchange', onDurationChange);
+        video.currentTime = 1e10;
+        setTimeout(() => {
+          video.removeEventListener('durationchange', onDurationChange);
+          resolve();
+        }, 3000);
+      });
+    }
+
+    // Asegurar que las dimensiones ya estén disponibles.
+    if (!video.videoWidth || !video.videoHeight) {
+      await new Promise((resolve) => {
+        video.addEventListener('loadeddata', resolve, { once: true });
+        setTimeout(resolve, 3000);
+      });
+    }
+
     const duration = video.duration;
     const vw = video.videoWidth;
     const vh = video.videoHeight;
@@ -303,7 +331,9 @@ async function handleFile(file) {
     resultEl.style.display = 'block';
   } catch (err) {
     console.error(err);
-    if (location.protocol === 'file:') {
+    if (err && err.message === 'NO_DECODE') {
+      statusEl.textContent = 'El navegador no pudo leer la duración o dimensiones de este video. Prueba con otro navegador (Chrome/Edge suelen funcionar mejor) o convierte el video a MP4 (H.264) e inténtalo de nuevo.';
+    } else if (location.protocol === 'file:') {
       statusEl.textContent = 'No se pudo procesar el video. Estás abriendo este archivo directamente (file://), lo cual bloquea el acceso al video en muchos navegadores. Sírvelo con un servidor local (ej: "python -m http.server") o pruébalo ya subido a GitHub Pages.';
     } else {
       statusEl.textContent = 'Ocurrió un error al procesar el video. Intenta con otro archivo o navegador.';
