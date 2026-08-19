@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Corte — recortador de audio y detector de beats</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#17130f;
+    --panel:#221c15;
+    --panel-2:#2a2318;
+    --tape:#c79a5a;
+    --cream:#f2e8d5;
+    --accent:#e2603a;
+    --pulse:#8fb693;
+    --muted:#9c8d74;
+    --line: rgba(242,232,213,0.14);
+    --danger:#c25454;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(1200px 600px at 15% -10%, rgba(199,154,90,0.08), transparent 60%),
+      var(--bg);
+    color:var(--cream);
+    font-family:'Inter',system-ui,sans-serif;
+    min-height:100vh;
+    padding:0 0 80px;
+  }
+  .wrap{max-width:920px;margin:0 auto;padding:48px 24px 0;}
+  header{margin-bottom:36px;}
+  .eyebrow{
+    font-family:'IBM Plex Mono',monospace;
+    letter-spacing:0.22em;
+    font-size:11px;
+    color:var(--tape);
+    text-transform:uppercase;
+    margin-bottom:10px;
+  }
+  h1{
+    font-family:'Bebas Neue',sans-serif;
+    font-size:clamp(52px,10vw,84px);
+    letter-spacing:0.02em;
+    line-height:0.9;
+    margin:0 0 12px;
+    color:var(--cream);
+  }
+  h1 .dot{color:var(--accent);}
+  .sub{
+    color:var(--muted);
+    font-size:15px;
+    max-width:520px;
+    line-height:1.5;
+    margin:0;
+  }
+
+  /* ---- Upload slot ---- */
+  .slot{
+    border:1.5px dashed var(--line);
+    border-radius:10px;
+    background:var(--panel);
+    padding:40px 24px;
+    text-align:center;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .slot.dragover{
+    border-color:var(--accent);
+    background:var(--panel-2);
+  }
+  .reel-icon{
+    font-size:34px;
+    color:var(--tape);
+    margin-bottom:10px;
+    letter-spacing:0.3em;
+  }
+  .slot p{margin:4px 0;color:var(--cream);font-size:14px;}
+  .slot .hint{color:var(--muted);font-size:12px;font-family:'IBM Plex Mono',monospace;}
+  .link-btn{
+    background:none;border:none;color:var(--accent);
+    text-decoration:underline;text-underline-offset:3px;
+    cursor:pointer;font:inherit;padding:0;
+  }
+  .link-btn:hover{color:#f0805e;}
+
+  /* ---- Editor ---- */
+  .editor{margin-top:8px;}
+  .track-info{
+    display:flex;justify-content:space-between;align-items:baseline;
+    margin-bottom:10px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    color:var(--muted);
+  }
+  #fileName{color:var(--cream);font-size:13px;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .counter{letter-spacing:0.05em;}
+  .change-file{
+    background:none;border:none;color:var(--tape);font-family:'IBM Plex Mono',monospace;
+    font-size:11px;cursor:pointer;text-decoration:underline;text-underline-offset:2px;padding:0;margin-left:10px;
+  }
+
+  .wave-panel{
+    position:relative;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    border-radius:8px;
+    height:160px;
+    overflow:hidden;
+    touch-action:none;
+    user-select:none;
+  }
+  canvas{display:block;width:100%;height:100%;}
+
+  .selection{
+    position:absolute;top:0;bottom:0;
+    background:linear-gradient(180deg, rgba(226,96,58,0.16), rgba(226,96,58,0.05));
+    border-left:2px dashed var(--accent);
+    border-right:2px dashed var(--accent);
+  }
+  .selection::before{
+    content:"";
+    position:absolute;top:0;left:0;right:0;height:5px;
+    background:repeating-linear-gradient(135deg, var(--accent) 0 6px, transparent 6px 12px);
+    opacity:0.7;
+  }
+  .handle{
+    position:absolute;top:0;bottom:0;width:14px;
+    cursor:ew-resize;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .handle-left{left:0;transform:translateX(-50%);}
+  .handle-right{right:0;transform:translateX(50%);}
+  .handle .grip{
+    width:6px;height:34px;border-radius:3px;
+    background:var(--accent);
+    box-shadow:0 0 0 3px rgba(226,96,58,0.18);
+  }
+  .handle:hover .grip, .handle:active .grip{background:#f0805e;}
+
+  .playhead{
+    position:absolute;top:0;bottom:0;width:2px;background:var(--cream);
+    box-shadow:0 0 6px rgba(242,232,213,0.6);
+    pointer-events:none;
+  }
+
+  .beat-tick{
+    position:absolute;top:0;width:0;height:0;
+    border-left:4px solid transparent;
+    border-right:4px solid transparent;
+    border-top:7px solid var(--pulse);
+    transform:translateX(-4px);
+    cursor:pointer;
+  }
+  .beat-tick:hover{border-top-color:#b6d6ba;}
+
+  .timecodes{
+    display:flex;gap:14px;margin-top:16px;
+    flex-wrap:wrap;
+  }
+  .tc-group{
+    flex:1;min-width:120px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:10px 12px;
+  }
+  .tc-group label{
+    display:block;font-family:'IBM Plex Mono',monospace;
+    font-size:10px;letter-spacing:0.15em;color:var(--muted);margin-bottom:6px;
+  }
+  .tc-inputs{display:flex;align-items:center;gap:4px;font-family:'IBM Plex Mono',monospace;}
+  .tc-inputs input{
+    width:52px;background:transparent;border:none;color:var(--cream);
+    font-family:'IBM Plex Mono',monospace;font-size:18px;
+    -moz-appearance:textfield;
+  }
+  .tc-inputs input::-webkit-outer-spin-button,
+  .tc-inputs input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+  .tc-inputs input:focus{outline:none;color:var(--accent);}
+  .tc-inputs span{color:var(--muted);font-size:18px;}
+  .tc-readout{
+    font-family:'IBM Plex Mono',monospace;font-size:18px;color:var(--pulse);
+  }
+
+  .actions{display:flex;gap:12px;margin-top:18px;flex-wrap:wrap;}
+  .btn{
+    font-family:'Inter',sans-serif;font-weight:600;font-size:13px;
+    padding:12px 18px;border-radius:7px;border:1px solid var(--line);
+    background:var(--panel);color:var(--cream);cursor:pointer;
+    transition:transform .1s ease, border-color .15s ease, background .15s ease;
+  }
+  .btn:hover{border-color:var(--tape);transform:translateY(-1px);}
+  .btn:active{transform:translateY(0);}
+  .btn:disabled{opacity:0.5;cursor:default;transform:none;}
+  .btn-accent{background:var(--accent);border-color:var(--accent);color:#1a0f0a;}
+  .btn-accent:hover{background:#f0805e;border-color:#f0805e;}
+  .btn-ghost{background:transparent;}
+
+  .beats-section{
+    margin-top:34px;padding-top:22px;border-top:1px solid var(--line);
+  }
+  .beats-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;}
+  .beats-head h2{
+    font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:0.03em;
+    margin:0;color:var(--cream);font-weight:400;
+  }
+  .beats-result{
+    margin-top:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  }
+  .bpm-badge{
+    background:var(--panel);border:1px solid var(--pulse);border-radius:8px;
+    padding:10px 16px;text-align:center;font-family:'IBM Plex Mono',monospace;
+    min-width:100px;
+  }
+  .bpm-badge span{display:block;font-size:26px;color:var(--pulse);}
+  .bpm-badge small{color:var(--muted);font-size:10px;letter-spacing:0.1em;}
+  .beats-note{color:var(--muted);font-size:12.5px;max-width:460px;line-height:1.5;margin:0;}
+
+  footer{
+    max-width:920px;margin:60px auto 0;padding:0 24px;
+    font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .btn, .slot{transition:none;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Herramienta de audio</div>
+    <h1>CORTE<span class="dot">.</span></h1>
+    <p class="sub">Subí un audio, arrastrá para marcar el pedazo que querés, descargalo, y encontrá el pulso de la canción.</p>
+  </header>
+
+  <section class="slot" id="dropzone">
+    <input type="file" id="fileInput" accept="audio/*" hidden>
+    <div class="reel-icon">◎ ◎</div>
+    <p>Arrastrá un audio acá o <button type="button" id="browseBtn" class="link-btn">elegí un archivo</button></p>
+    <p class="hint">MP3 · WAV · M4A · OGG</p>
+  </section>
+
+  <section class="editor" id="editor" hidden>
+    <div class="track-info">
+      <span id="fileName">—<button type="button" class="change-file" id="changeFileBtn">cambiar archivo</button></span>
+      <span class="counter" id="totalTime">00:00.00</span>
+    </div>
+
+    <div class="wave-panel" id="wavePanel">
+      <canvas id="waveCanvas"></canvas>
+      <div class="selection" id="selectionBox">
+        <div class="handle handle-left" id="handleStart"><span class="grip"></span></div>
+        <div class="handle handle-right" id="handleEnd"><span class="grip"></span></div>
+      </div>
+      <div class="playhead" id="playhead" hidden></div>
+    </div>
+
+    <div class="timecodes">
+      <div class="tc-group">
+        <label>INICIO</label>
+        <div class="tc-inputs"><input type="number" min="0" id="startMin" value="0"><span>:</span><input type="number" min="0" max="59" step="0.1" id="startSec" value="0"></div>
+      </div>
+      <div class="tc-group">
+        <label>DURACIÓN SELECCIÓN</label>
+        <div class="tc-readout" id="selDuration">00:00.00</div>
+      </div>
+      <div class="tc-group">
+        <label>FIN</label>
+        <div class="tc-inputs"><input type="number" min="0" id="endMin" value="0"><span>:</span><input type="number" min="0" max="59" step="0.1" id="endSec" value="5"></div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button id="playBtn" class="btn">▶ Reproducir selección</button>
+      <button id="downloadBtn" class="btn btn-accent">⬇ Descargar recorte</button>
+    </div>
+
+    <div class="beats-section">
+      <div class="beats-head">
+        <h2>Pulso / beats</h2>
+        <button id="detectBtn" class="btn btn-ghost">Detectar beats</button>
+      </div>
+      <div id="beatsResult" class="beats-result" hidden>
+        <div class="bpm-badge"><span id="bpmValue">—</span><small>BPM aprox.</small></div>
+        <p class="beats-note">Se marcaron <b id="beatsCount">0</b> golpes sobre la onda (triángulos verdes). Hacé clic en una marca para mandar el inicio de la selección ahí.</p>
+      </div>
+    </div>
+  </section>
+</div>
+
+<footer>Todo el procesamiento ocurre en tu navegador — el audio nunca se sube a ningún servidor.</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- estado ----------
+  let audioCtx = null;
+  let audioBuffer = null;
+  let duration = 0;
+  let selStart = 0, selEnd = 5;
+  let baseName = "audio";
+  let dragging = null; // 'start' | 'end' | 'new'
+  let playSource = null;
+  let playStartCtxTime = 0;
+  let playheadRAF = null;
+  let beats = [];
+
+  // ---------- referencias DOM ----------
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+  const browseBtn = document.getElementById('browseBtn');
+  const editor = document.getElementById('editor');
+  const fileNameEl = document.getElementById('fileName');
+  const changeFileBtn = document.getElementById('changeFileBtn');
+  const totalTimeEl = document.getElementById('totalTime');
+  const wavePanel = document.getElementById('wavePanel');
+  const canvas = document.getElementById('waveCanvas');
+  const cctx = canvas.getContext('2d');
+  const selectionBox = document.getElementById('selectionBox');
+  const handleStart = document.getElementById('handleStart');
+  const handleEnd = document.getElementById('handleEnd');
+  const playhead = document.getElementById('playhead');
+  const startMin = document.getElementById('startMin');
+  const startSec = document.getElementById('startSec');
+  const endMin = document.getElementById('endMin');
+  const endSec = document.getElementById('endSec');
+  const selDurationEl = document.getElementById('selDuration');
+  const playBtn = document.getElementById('playBtn');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const detectBtn = document.getElementById('detectBtn');
+  const beatsResult = document.getElementById('beatsResult');
+  const bpmValueEl = document.getElementById('bpmValue');
+  const beatsCountEl = document.getElementById('beatsCount');
+
+  function getCtx(){
+    if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    return audioCtx;
+  }
+
+  function fmt(t){
+    if(!isFinite(t) || t < 0) t = 0;
+    const m = Math.floor(t/60);
+    const s = t - m*60;
+    return String(m).padStart(2,'0') + ':' + s.toFixed(2).padStart(5,'0');
+  }
+
+  // ---------- carga de archivo ----------
+  ['dragenter','dragover'].forEach(evt=>{
+    dropzone.addEventListener(evt, e=>{ e.preventDefault(); dropzone.classList.add('dragover'); });
+  });
+  ['dragleave','drop'].forEach(evt=>{
+    dropzone.addEventListener(evt, e=>{ e.preventDefault(); dropzone.classList.remove('dragover'); });
+  });
+  dropzone.addEventListener('drop', e=>{
+    const f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if(f) loadFile(f);
+  });
+  dropzone.addEventListener('click', (e)=>{
+    if(e.target === browseBtn) return;
+    fileInput.click();
+  });
+  browseBtn.addEventListener('click', ()=> fileInput.click());
+  fileInput.addEventListener('change', ()=>{
+    if(fileInput.files[0]) loadFile(fileInput.files[0]);
+  });
+  changeFileBtn.addEventListener('click', ()=>{
+    stopPlayback();
+    editor.hidden = true;
+    dropzone.hidden = false;
+    fileInput.value = '';
+  });
+
+  function loadFile(file){
+    baseName = file.name.replace(/\.[^.]+$/, '') || 'audio';
+    const reader = new FileReader();
+    reader.onload = function(e){
+      getCtx().decodeAudioData(e.target.result.slice(0), function(buf){
+        audioBuffer = buf;
+        duration = buf.duration;
+        selStart = 0;
+        selEnd = Math.min(5, duration);
+        beats = [];
+        beatsResult.hidden = true;
+        clearBeatTicks();
+        fileNameEl.childNodes[0].textContent = file.name + '  ';
+        totalTimeEl.textContent = fmt(duration);
+        dropzone.hidden = true;
+        editor.hidden = false;
+        requestAnimationFrame(()=>{ resizeCanvas(); drawWaveform(); syncInputsFromSelection(); updateSelectionUI(); });
+      }, function(err){
+        alert('No se pudo leer ese archivo de audio.');
+      });
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  // ---------- onda ----------
+  function resizeCanvas(){
+    const rect = wavePanel.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.max(1, Math.round(rect.width * dpr));
+    canvas.height = Math.max(1, Math.round(rect.height * dpr));
+  }
+
+  function getMonoData(buffer){
+    if(buffer.numberOfChannels === 1) return buffer.getChannelData(0);
+    const ch0 = buffer.getChannelData(0), ch1 = buffer.getChannelData(1);
+    const out = new Float32Array(ch0.length);
+    for(let i=0;i<ch0.length;i++) out[i] = (ch0[i] + ch1[i]) / 2;
+    return out;
+  }
+
+  function drawWaveform(){
+    if(!audioBuffer) return;
+    const w = canvas.width, h = canvas.height;
+    cctx.clearRect(0,0,w,h);
+    const data = getMonoData(audioBuffer);
+    const step = Math.max(1, Math.floor(data.length / w));
+    const mid = h/2;
+    cctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--cream').trim() || '#f2e8d5';
+    for(let x=0; x<w; x++){
+      let min = 1.0, max = -1.0;
+      const start = x*step;
+      const end = Math.min(data.length, start+step);
+      for(let i=start; i<end; i++){
+        const v = data[i];
+        if(v < min) min = v;
+        if(v > max) max = v;
+      }
+      if(end <= start){ min = 0; max = 0; }
+      const y1 = mid + min*mid*0.92;
+      const y2 = mid + max*mid*0.92;
+      cctx.fillRect(x, Math.min(y1,y2), 1, Math.max(1, Math.abs(y2-y1)));
+    }
+  }
+
+  window.addEventListener('resize', ()=>{
+    if(!audioBuffer) return;
+    resizeCanvas();
+    drawWaveform();
+    updateSelectionUI();
+    layoutBeatTicks();
+  });
+
+  // ---------- selección: arrastre ----------
+  function timeFromClientX(clientX){
+    const rect = wavePanel.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    return ratio * duration;
+  }
+
+  function pointerDownHandle(which){
+    return function(e){
+      e.preventDefault();
+      dragging = which;
+      e.target.setPointerCapture && e.target.setPointerCapture(e.pointerId);
+    };
+  }
+  handleStart.addEventListener('pointerdown', pointerDownHandle('start'));
+  handleEnd.addEventListener('pointerdown', pointerDownHandle('end'));
+
+  wavePanel.addEventListener('pointerdown', (e)=>{
+    if(e.target === handleStart || e.target === handleEnd || handleStart.contains(e.target) || handleEnd.contains(e.target)) return;
+    if(!audioBuffer) return;
+    const t = timeFromClientX(e.clientX);
+    selStart = t;
+    selEnd = t;
+    dragging = 'end';
+    updateSelectionUI();
+  });
+
+  window.addEventListener('pointermove', (e)=>{
+    if(!dragging || !audioBuffer) return;
+    const t = timeFromClientX(e.clientX);
+    if(dragging === 'start'){
+      selStart = Math.min(t, selEnd - 0.02);
+      selStart = Math.max(0, selStart);
+    } else {
+      selEnd = Math.max(t, selStart + 0.02);
+      selEnd = Math.min(duration, selEnd);
+    }
+    updateSelectionUI();
+  });
+
+  window.addEventListener('pointerup', ()=>{
+    if(dragging){
+      dragging = null;
+      syncInputsFromSelection();
+    }
+  });
+
+  function updateSelectionUI(){
+    if(!duration) return;
+    const rect = wavePanel.getBoundingClientRect();
+    const leftPx = (selStart/duration) * rect.width;
+    const rightPx = (selEnd/duration) * rect.width;
+    selectionBox.style.left = leftPx + 'px';
+    selectionBox.style.width = Math.max(2, rightPx-leftPx) + 'px';
+    selDurationEl.textContent = fmt(Math.max(0, selEnd-selStart));
+  }
+
+  // ---------- inputs numéricos ----------
+  function syncInputsFromSelection(){
+    startMin.value = Math.floor(selStart/60);
+    startSec.value = (selStart % 60).toFixed(2);
+    endMin.value = Math.floor(selEnd/60);
+    endSec.value = (selEnd % 60).toFixed(2);
+    updateSelectionUI();
+  }
+
+  function readInputsToSelection(source){
+    const s = (parseFloat(startMin.value)||0)*60 + (parseFloat(startSec.value)||0);
+    const e = (parseFloat(endMin.value)||0)*60 + (parseFloat(endSec.value)||0);
+    let ns = Math.min(Math.max(0,s), duration);
+    let ne = Math.min(Math.max(0,e), duration);
+    if(ne <= ns) ne = Math.min(duration, ns + 0.05);
+    selStart = ns; selEnd = ne;
+    updateSelectionUI();
+  }
+  [startMin,startSec,endMin,endSec].forEach(inp=>{
+    inp.addEventListener('change', ()=> readInputsToSelection());
+  });
+
+  // ---------- reproducción ----------
+  function stopPlayback(){
+    if(playSource){
+      try{ playSource.onended = null; playSource.stop(); }catch(err){}
+      playSource = null;
+    }
+    if(playheadRAF){ cancelAnimationFrame(playheadRAF); playheadRAF = null; }
+    playhead.hidden = true;
+    playBtn.textContent = '▶ Reproducir selección';
+  }
+
+  playBtn.addEventListener('click', ()=>{
+    if(!audioBuffer) return;
+    if(playSource){ stopPlayback(); return; }
+    const ctx = getCtx();
+    if(ctx.state === 'suspended') ctx.resume();
+    playSource = ctx.createBufferSource();
+    playSource.buffer = audioBuffer;
+    playSource.connect(ctx.destination);
+    const dur = Math.max(0.01, selEnd - selStart);
+    playStartCtxTime = ctx.currentTime;
+    playSource.start(0, selStart, dur);
+    playBtn.textContent = '⏸ Detener';
+    playhead.hidden = false;
+    playSource.onended = ()=>{ stopPlayback(); };
+
+    const rect = wavePanel.getBoundingClientRect();
+    function tick(){
+      if(!playSource) return;
+      const elapsed = ctx.currentTime - playStartCtxTime;
+      const t = selStart + elapsed;
+      const x = (t/duration) * rect.width;
+      playhead.style.left = x + 'px';
+      playheadRAF = requestAnimationFrame(tick);
+    }
+    tick();
+  });
+
+  // ---------- descarga ----------
+  function extractBuffer(buffer, start, end){
+    const sr = buffer.sampleRate;
+    const startSample = Math.floor(start*sr);
+    const endSample = Math.min(buffer.length, Math.floor(end*sr));
+    const frameCount = Math.max(1, endSample-startSample);
+    const ctx = getCtx();
+    const newBuffer = ctx.createBuffer(buffer.numberOfChannels, frameCount, sr);
+    for(let ch=0; ch<buffer.numberOfChannels; ch++){
+      const src = buffer.getChannelData(ch).subarray(startSample, startSample+frameCount);
+      newBuffer.copyToChannel(src.length===frameCount ? src : padTo(src, frameCount), ch, 0);
+    }
+    return newBuffer;
+  }
+  function padTo(arr, len){
+    const out = new Float32Array(len);
+    out.set(arr.subarray(0, Math.min(arr.length,len)));
+    return out;
+  }
+
+  function writeString(view, offset, str){
+    for(let i=0;i<str.length;i++) view.setUint8(offset+i, str.charCodeAt(i));
+  }
+
+  function bufferToWav(buffer){
+    const numChannels = buffer.numberOfChannels;
+    const sampleRate = buffer.sampleRate;
+    const bitDepth = 16;
+    const bytesPerSample = bitDepth/8;
+    const blockAlign = numChannels*bytesPerSample;
+    const numFrames = buffer.length;
+    const dataSize = numFrames*blockAlign;
+    const arrBuf = new ArrayBuffer(44+dataSize);
+    const view = new DataView(arrBuf);
+    writeString(view,0,'RIFF');
+    view.setUint32(4, 36+dataSize, true);
+    writeString(view,8,'WAVE');
+    writeString(view,12,'fmt ');
+    view.setUint32(16,16,true);
+    view.setUint16(20,1,true);
+    view.setUint16(22,numChannels,true);
+    view.setUint32(24,sampleRate,true);
+    view.setUint32(28,sampleRate*blockAlign,true);
+    view.setUint16(32,blockAlign,true);
+    view.setUint16(34,bitDepth,true);
+    writeString(view,36,'data');
+    view.setUint32(40,dataSize,true);
+    const channels = [];
+    for(let i=0;i<numChannels;i++) channels.push(buffer.getChannelData(i));
+    let offset = 44;
+    for(let i=0;i<numFrames;i++){
+      for(let ch=0; ch<numChannels; ch++){
+        let sample = Math.max(-1, Math.min(1, channels[ch][i]));
+        sample = sample < 0 ? sample*0x8000 : sample*0x7FFF;
+        view.setInt16(offset, sample, true);
+        offset += 2;
+      }
+    }
+    return new Blob([view], {type:'audio/wav'});
+  }
+
+  downloadBtn.addEventListener('click', ()=>{
+    if(!audioBuffer) return;
+    if(selEnd - selStart < 0.03){ alert('Marcá una selección un poco más larga.'); return; }
+    const trimmed = extractBuffer(audioBuffer, selStart, selEnd);
+    const blob = bufferToWav(trimmed);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const tag = (t)=> fmt(t).replace(':','m').replace('.','s');
+    a.href = url;
+    a.download = baseName + '_' + tag(selStart) + '-' + tag(selEnd) + '.wav';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(()=> URL.revokeObjectURL(url), 4000);
+  });
+
+  // ---------- detección de beats ----------
+  function clearBeatTicks(){
+    wavePanel.querySelectorAll('.beat-tick').forEach(el=>el.remove());
+  }
+
+  function layoutBeatTicks(){
+    if(!duration) return;
+    const rect = wavePanel.getBoundingClientRect();
+    wavePanel.querySelectorAll('.beat-tick').forEach((el,i)=>{
+      const t = beats[i];
+      el.style.left = ((t/duration)*rect.width) + 'px';
+    });
+  }
+
+  function renderBeatTicks(){
+    clearBeatTicks();
+    const rect = wavePanel.getBoundingClientRect();
+    const frag = document.createDocumentFragment();
+    beats.forEach(t=>{
+      const el = document.createElement('div');
+      el.className = 'beat-tick';
+      el.style.left = ((t/duration)*rect.width) + 'px';
+      el.title = fmt(t);
+      el.addEventListener('click', ()=>{
+        const d = Math.max(0.05, selEnd - selStart);
+        selStart = t;
+        selEnd = Math.min(duration, t + d);
+        syncInputsFromSelection();
+      });
+      frag.appendChild(el);
+    });
+    wavePanel.appendChild(frag);
+  }
+
+  detectBtn.addEventListener('click', async ()=>{
+    if(!audioBuffer) return;
+    detectBtn.disabled = true;
+    const originalLabel = detectBtn.textContent;
+    detectBtn.textContent = 'Analizando…';
+    try{
+      const sr = audioBuffer.sampleRate;
+      const offlineCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, audioBuffer.length, sr);
+      const src = offlineCtx.createBufferSource();
+      src.buffer = audioBuffer;
+      const filter = offlineCtx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 150;
+      src.connect(filter);
+      filter.connect(offlineCtx.destination);
+      src.start(0);
+      const rendered = await offlineCtx.startRendering();
+      const data = rendered.getChannelData(0);
+      const rsr = rendered.sampleRate;
+
+      const chunkMs = 0.02;
+      const chunkSize = Math.max(1, Math.round(rsr*chunkMs));
+      const numChunks = Math.floor(data.length/chunkSize);
+      const energies = new Float32Array(numChunks);
+      for(let i=0;i<numChunks;i++){
+        let sum = 0;
+        const start = i*chunkSize;
+        for(let j=0;j<chunkSize;j++){ const v = data[start+j]; sum += v*v; }
+        energies[i] = sum/chunkSize;
+      }
+
+      const historyChunks = 45; // ~0.9s de historia
+      const threshold = 1.35;
+      const minGapChunks = Math.round(0.22/chunkMs);
+      const detected = [];
+      let lastBeat = -minGapChunks;
+      let runningSum = 0;
+      for(let i=0;i<numChunks;i++){
+        const from = Math.max(0, i-historyChunks);
+        let sum = 0, count = 0;
+        for(let k=from;k<i;k++){ sum += energies[k]; count++; }
+        const localAvg = count>0 ? sum/count : 0;
+        if(energies[i] > localAvg*threshold && energies[i] > 0.00001 && (i-lastBeat) >= minGapChunks){
+          detected.push(i*chunkSize/rsr);
+          lastBeat = i;
+        }
+      }
+      beats = detected;
+
+      let bpm = null;
+      if(beats.length > 4){
+        const intervals = [];
+        for(let i=1;i<beats.length;i++) intervals.push(beats[i]-beats[i-1]);
+        intervals.sort((a,b)=>a-b);
+        let median = intervals[Math.floor(intervals.length/2)];
+        if(median > 0){
+          bpm = 60/median;
+          while(bpm < 70) bpm *= 2;
+          while(bpm > 190) bpm /= 2;
+          bpm = Math.round(bpm);
+        }
+      }
+
+      bpmValueEl.textContent = bpm ? bpm : '—';
+      beatsCountEl.textContent = beats.length;
+      beatsResult.hidden = false;
+      renderBeatTicks();
+    }catch(err){
+      alert('No se pudo analizar el audio para detectar beats.');
+    }finally{
+      detectBtn.disabled = false;
+      detectBtn.textContent = originalLabel;
+    }
+  });
+
+})();
+</script>
+</body>
+</html>

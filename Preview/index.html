@@ -78,8 +78,8 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>Vista Previa de Video (Contact Sheet)</h1>
-  <div class="sub">Sube un video y genera una imagen con 16 cuadros en orden cronológico. Todo se procesa en tu navegador, sin conexión a internet.</div>
+  <h1>Preview Video</h1>
+  <div class="sub">Upload a video and generate an image with 16 frames in chronological order. Everything is processed in your browser, without an internet connection.</div>
 
   <div class="drop" id="drop">
     <p><strong>Haz clic para elegir un video</strong> o arrástralo aquí</p>
@@ -95,8 +95,8 @@
       <canvas id="sheetCanvas"></canvas>
     </div>
     <div class="actions">
-      <button id="downloadBtn">Descargar imagen (PNG)</button>
-      <button class="secondary" id="resetBtn">Elegir otro video</button>
+      <button id="downloadBtn">Save imagen (PNG)</button>
+      <button class="secondary" id="resetBtn">Next video</button>
     </div>
   </div>
 </div>
@@ -274,7 +274,7 @@ async function handleFile(file) {
     ctx.stroke();
 
     ctx.fillStyle = '#e7ebf1';
-    ctx.font = 'bold 20px Arial';
+    ctx.font = 'bold 25px Arial';
     ctx.textBaseline = 'top';
     let displayName = file.name;
     // truncar si es muy largo
@@ -284,9 +284,9 @@ async function handleFile(file) {
     }
     ctx.fillText(displayName, 12, 12);
 
-    ctx.fillStyle = '#8b95a7';
-    ctx.font = '14px Arial';
-    const infoLine = `Duración: ${formatDuration(duration)}    Tamaño: ${formatSize(file.size)}    Resolución: ${vw}x${vh}`;
+    ctx.fillStyle = '#E63939';
+    ctx.font = '20px Arial';
+    const infoLine = `🕑: ${formatDuration(duration)}    📦: ${formatSize(file.size)}    ↔️: ${vw}x${vh}`;
     ctx.fillText(infoLine, 12, 42);
 
     // Offscreen canvas para capturar cada cuadro
