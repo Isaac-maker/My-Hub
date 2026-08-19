@@ -274,7 +274,7 @@ async function handleFile(file) {
     ctx.stroke();
 
     ctx.fillStyle = '#e7ebf1';
-    ctx.font = 'bold 25px Arial';
+    ctx.font = 'bold 20px Arial';
     ctx.textBaseline = 'top';
     let displayName = file.name;
     // truncar si es muy largo
@@ -284,9 +284,9 @@ async function handleFile(file) {
     }
     ctx.fillText(displayName, 12, 12);
 
-    ctx.fillStyle = '#E63939';
-    ctx.font = '20px Arial';
-    const infoLine = `🕑: ${formatDuration(duration)}    📦: ${formatSize(file.size)}    ↔️: ${vw}x${vh}`;
+    ctx.fillStyle = '#8b95a7';
+    ctx.font = '14px Arial';
+    const infoLine = `Duración: ${formatDuration(duration)}    Tamaño: ${formatSize(file.size)}    Resolución: ${vw}x${vh}`;
     ctx.fillText(infoLine, 12, 42);
 
     // Offscreen canvas para capturar cada cuadro
